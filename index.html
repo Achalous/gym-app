@@ -52,6 +52,10 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .wt{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:14px;font-weight:600}
 .wt input{width:76px;padding:10px 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit;font-size:17px;font-weight:700;text-align:right}
 .ex.ok{border-color:var(--done)}
+.set{display:flex;flex-direction:column;align-items:center;gap:5px}
+.rp{width:48px;padding:6px 2px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;font-weight:700;text-align:center;-moz-appearance:textfield}
+.rp::-webkit-inner-spin-button,.rp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.hist.up{color:var(--done)}
 .msg{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin:0 0 14px;box-shadow:var(--sh)}
 .msg b{font-size:22px;display:block;margin-bottom:4px}
 .day{display:flex;justify-content:space-between;padding:13px 16px;background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 0 8px;box-shadow:var(--sh)}
@@ -82,8 +86,8 @@ nav button{font-size:14px;padding:10px 2px}
 :root[data-style="concrete"]{--bg:#d8d5ce;--card:#efece6;--ink:#111;--mute:#4a4741;--line:#111;--acc:#ffd400;--accink:#111;--done:#111;--sh:4px 4px 0 #111}
 [data-style="concrete"] body{background:var(--bg);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
 [data-style="concrete"] h1{background:none;color:var(--ink);text-transform:uppercase;letter-spacing:-.05em}
-[data-style="concrete"] :is(.ex,.msg,.day,nav,.hero,.chip,.plate,.wt input,.note,.form select,.form input,.meta,.ghost,.sp,#rest,.pb,nav button){border-radius:0}
-[data-style="concrete"] :is(.ex,.msg,.day,nav,.hero,.chip,.wt input,.form select,.form input,.sp,.ghost){border:2px solid #111}
+[data-style="concrete"] :is(.ex,.msg,.day,nav,.hero,.chip,.plate,.wt input,.rp,.note,.form select,.form input,.meta,.ghost,.sp,#rest,.pb,nav button){border-radius:0}
+[data-style="concrete"] :is(.ex,.msg,.day,nav,.hero,.chip,.wt input,.rp,.form select,.form input,.sp,.ghost){border:2px solid #111}
 [data-style="concrete"] :is(.ex,.msg,.day,nav,.sp[aria-pressed="true"]){box-shadow:var(--sh)}
 [data-style="concrete"] nav button[aria-pressed="true"]{background:var(--acc);color:#111;box-shadow:none}
 [data-style="concrete"] .hero,[data-style="concrete"] .hero.win{background:#111;animation:none}
@@ -148,7 +152,7 @@ nav button{font-size:14px;padding:10px 2px}
 </main>
 <script>
 var K='gym-routine-v1';
-var S={start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[]};
+var S={start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{}};
 try{var r=JSON.parse(localStorage.getItem(K));if(r&&typeof r==='object'){S=Object.assign(S,r)}}catch(e){}
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
 
@@ -178,17 +182,27 @@ function plan(dow){
  return {2:'Rest',4:'Rest',6:'Hike',0:'D&D and full rest'}[dow];
 }
 
-var NAMES={};W.A.items.concat(W.B.items).forEach(function(x){NAMES[x[0]]=x[1]});
+var NAMES={},TOP={};W.A.items.concat(W.B.items).forEach(function(x){NAMES[x[0]]=x[1];TOP[x[0]]=parseInt(x[3].split('-')[1],10)});
+// Suggested jump once every set hits the top of the rep range: bigger for the heavy lower-body lifts.
+var INC={leg:5,squat:5,hip:5};
+// S.r[id] holds [date, [reps per set]] for each session, oldest first.
+function repsOn(id,d){var R=S.r[id]||[];for(var i=R.length-1;i>=0;i--)if(R[i][0]===d)return R[i][1];return null}
+function lastReps(id){var R=S.r[id]||[],t=dkey(now);for(var i=R.length-1;i>=0;i--)if(R[i][0]!==t)return R[i];return null}
+function topAll(r,top){return !!(r&&r.length&&top&&r.every(function(v){return v!=null&&v>=top}))}
 function esc(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
-function histHtml(id){
- var hs=S.h[id]||[],t=dkey(now),prev=hs.filter(function(x){return x[0]!==t}),last=prev.length?prev[prev.length-1][1]:null,pb=0,pp=0,cur=S.w[id];
+function histHtml(id,n){
+ var hs=S.h[id]||[],t=dkey(now),prev=hs.filter(function(x){return x[0]!==t}),lw=prev.length?prev[prev.length-1]:null,last=lw?lw[1]:null,pb=0,pp=0,cur=S.w[id];
  hs.forEach(function(x){if(x[1]>pb)pb=x[1]});prev.forEach(function(x){if(x[1]>pp)pp=x[1]});
- var line=last!=null?'Last time '+last+' kg &middot; PB '+pb+' kg':'No history yet';
+ var lr=lastReps(id),reps=lr&&lr[1].some(function(v){return v!=null})?lr[1].map(function(v){return v==null?'-':v}).join(', '):'';
+ var line=last!=null?'Last time '+last+' kg'+(reps&&lr[0]===lw[0]?' &times; '+reps:'')+' &middot; PB '+pb+' kg':reps?'Last time '+reps+' reps':'No history yet';
  var badge=(cur!=null&&pp>0&&cur>pp)?' <span class="pb">New PB</span>':'';
- return '<p class="hist">'+line+badge+'</p>';
+ var top=TOP[id],tr=repsOn(id,t),tip='';
+ if(tr&&tr.length>=n&&topAll(tr,top))tip='Top of the range on every set. Add weight next time.';
+ else if(lr&&topAll(lr[1],top)){var base=(lw&&lw[0]===lr[0])?lw[1]:last;if(base!=null&&!(cur>base))tip='Hit '+top+'+ reps on every set last time. Try '+(base+(INC[id]||2.5))+' kg today.'}
+ return '<p class="hist">'+line+badge+'</p>'+(tip?'<p class="hist up">'+tip+'</p>':'');
 }
-function extra(id){
- return histHtml(id)+'<input class="note" data-n="'+id+'" value="'+esc(S.n[id]||'')+'" placeholder="Seat and machine settings" aria-label="Settings note for '+esc(NAMES[id])+'">'+howHtml(id);
+function extra(id,n){
+ return '<div class="hw">'+histHtml(id,n)+'</div>'+'<input class="note" data-n="'+id+'" value="'+esc(S.n[id]||'')+'" placeholder="Seat and machine settings" aria-label="Settings note for '+esc(NAMES[id])+'">'+howHtml(id);
 }
 var openHow=null,demoIx=0,raf=0;
 var DEMO={
@@ -278,11 +292,30 @@ function render(){
  else if(tab==='progress')el.innerHTML=progressHtml();
  else if(tab==='notes')el.innerHTML=notesHtml();
  else el.innerHTML=workoutHtml(dow,today);
- var nf=Object.keys(S.fin||{}).length;
- document.getElementById('s').textContent=plan(dow)+' today. '+(today?'Week '+(weekIdx()%2===0?'1':'2')+' order'+(S.flip?' (flipped)':'')+'. ':'')+nf+' session'+(nf===1?'':'s')+' finished so far.';
+ document.getElementById('s').textContent=subText();
  if(openHow&&tab==='today')startDemo();else stopDemo();
 }
 
+function subText(){
+ var dow=now.getDay(),nf=Object.keys(S.fin||{}).length;
+ return plan(dow)+' today. '+(sessionFor(dow)?'Week '+(weekIdx()%2===0?'1':'2')+' order'+(S.flip?' (flipped)':'')+'. ':'')+nf+' session'+(nf===1?'':'s')+' finished so far.';
+}
+function heroHtml(title,dn,tot){
+ var pct=tot?Math.round(dn/tot*100):0,win=dn===tot&&tot;
+ return '<div class="hero'+(win?' win':'')+'" data-title="'+esc(title)+'"><svg class="ring" viewBox="0 0 44 44" role="img" aria-label="'+pct+' percent complete"><circle class="rb" cx="22" cy="22" r="19"/><circle class="rf" cx="22" cy="22" r="19" style="stroke-dasharray:'+(pct*1.1938).toFixed(1)+' 119.4"/></svg><div><h2>'+title+' &middot; '+pct+'%</h2><p class="cnt">'+dn+' of '+tot+' done'+(win?'. Session complete, now eat.':'')+'</p></div></div>';
+}
+function markFin(dk,dn,tot){if(tot&&dn===tot&&!S.fin[dk]){S.fin[dk]=1;save()}}
+// Update ticks, the progress ring and the subtitle in place, so typing reps never loses focus to a full render.
+function syncTicks(){
+ var dk=dkey(now),D=S.done[dk]||{},tot=0,dn=0;
+ document.querySelectorAll('#app .ex').forEach(function(ex){var ps=ex.querySelectorAll('.plate'),all=true;
+  ps.forEach(function(p){var on=!!D[p.dataset.k];p.setAttribute('aria-pressed',on);tot++;if(on)dn++;else all=false});
+  if(ps.length)ex.classList.toggle('ok',all)});
+ var hero=document.querySelector('#app .hero');
+ if(hero){var tmp=document.createElement('div');tmp.innerHTML=heroHtml(hero.dataset.title,dn,tot);var nh=tmp.firstChild;
+  if(nh.className===hero.className)hero.innerHTML=nh.innerHTML;else hero.replaceWith(nh)}
+ markFin(dk,dn,tot);document.getElementById('s').textContent=subText();
+}
 function workoutHtml(dow,today){
  var key=view==='today'?today:view;
  var h='<div class="chips" role="group" aria-label="Choose workout"><button class="chip" data-view="today" aria-pressed="'+(view==='today')+'">Today</button><button class="chip" data-view="A" aria-pressed="'+(view==='A')+'">Workout A</button><button class="chip" data-view="B" aria-pressed="'+(view==='B')+'">Workout B</button></div>';
@@ -291,15 +324,18 @@ function workoutHtml(dow,today){
  }
  var dk=dkey(now),D=S.done[dk]||{},list=items(key,view==='today'?dow:-1),tot=0,dn=0;
  var body=list.map(function(x){
-  var id=x[0],n=x[2],all=true,pl='';
+  var id=x[0],n=x[2],all=true,pl='',tr=x[4]?null:repsOn(id,dk)||[],lr=x[4]?null:lastReps(id);
   for(var i=1;i<=n;i++){var k=id+'-'+i,on=!!D[k];tot++;if(on)dn++;else all=false;
-   pl+='<button class="plate" data-k="'+k+'" aria-pressed="'+on+'" aria-label="'+x[1]+' set '+i+'">'+i+'</button>'}
+   var b='<button class="plate" data-k="'+k+'" aria-pressed="'+on+'" aria-label="'+x[1]+' set '+i+'">'+i+'</button>';
+   if(!x[4]){var lv=lr&&lr[1][i-1]!=null?lr[1][i-1]:'';
+    b='<div class="set">'+b+'<input class="rp" type="number" inputmode="numeric" min="0" max="999" step="1" data-r="'+k+'" value="'+(tr[i-1]!=null?tr[i-1]:'')+'" placeholder="'+(lv!==''?lv:'reps')+'" aria-label="Reps for '+x[1]+' set '+i+(lv!==''?', '+lv+' last time':'')+'"></div>'}
+   pl+=b}
   var wt=x[4]?'':'<label class="wt">kg <input type="number" inputmode="decimal" min="0" step="0.5" data-w="'+id+'" value="'+(S.w[id]!=null?S.w[id]:'')+'" placeholder="0" aria-label="Weight in kg for '+x[1]+'"></label>';
-  return '<div class="ex'+(all?' ok':'')+'"><div class="top"><b>'+x[1]+'</b><span class="meta">'+(x[3]?n+' x '+x[3]:'')+'</span></div><div class="row"><div class="sets">'+pl+'</div>'+wt+'</div>'+(x[4]?'':extra(id))+'</div>';
+  return '<div class="ex'+(all?' ok':'')+'"><div class="top"><b>'+x[1]+'</b><span class="meta">'+(x[3]?n+' x '+x[3]:'')+'</span></div><div class="row"><div class="sets">'+pl+'</div>'+wt+'</div>'+(x[4]?'':extra(id,n))+'</div>';
  }).join('');
- var pct=tot?Math.round(dn/tot*100):0;if(tot&&dn===tot&&!S.fin[dk]){S.fin[dk]=1;save()}
+ markFin(dk,dn,tot);
  var note=(view==='today'&&dow===5)?'<p class="small">Friday: first lift is down to 2 sets so your legs are fresh for Saturday.</p>':'';
- return h+'<div class="hero'+(dn===tot&&tot?' win':'')+'"><svg class="ring" viewBox="0 0 44 44" role="img" aria-label="'+pct+' percent complete"><circle class="rb" cx="22" cy="22" r="19"/><circle class="rf" cx="22" cy="22" r="19" style="stroke-dasharray:'+(pct*1.1938).toFixed(1)+' 119.4"/></svg><div><h2>'+W[key].title+' &middot; '+pct+'%</h2><p class="cnt">'+dn+' of '+tot+' done'+(dn===tot&&tot?'. Session complete, now eat.':'')+'</p></div></div>'+note+body+'<p class="small">Stop each set 1-2 reps short of failure. When you hit the top reps on every set, add a little weight next time. Weights save on this device.</p><button class="ghost" data-act="reset">Clear today\'s ticks</button>';
+ return h+heroHtml(W[key].title,dn,tot)+note+body+'<p class="small">Stop each set 1-2 reps short of failure. Type the reps you did under each set; when you hit the top of the range on every set, the app will tell you to add weight. Everything saves on this device.</p><button class="ghost" data-act="reset">Clear today\'s sets</button>';
 }
 
 function weekHtml(){
@@ -321,7 +357,7 @@ function progressHtml(){
  if(!ids.length)h+='<p class="small">Log a weight on any lift and your history shows up here.</p>';
  ids.forEach(function(k){
   var v=S.h[k].map(function(x){return x[1]}),pb=Math.max.apply(null,v),d=v[v.length-1]-v[0];
-  h+='<div class="ex"><div class="top"><b>'+NAMES[k]+'</b><span class="meta">PB '+pb+' kg</span></div><div class="row"><span class="small">Started '+v[0]+' kg, now '+v[v.length-1]+' kg ('+(d>=0?'+':'')+d+')</span>'+spark(v)+'</div></div>';
+  h+='<div class="ex"><div class="top"><b>'+NAMES[k]+'</b><span class="meta">PB '+pb+' kg</span></div><div class="row"><span class="small">Started '+v[0]+' kg, now '+v[v.length-1]+' kg ('+(d>=0?'+':'')+d+')'+((S.r[k]||[]).length?'<br>Latest reps '+S.r[k][S.r[k].length-1][1].map(function(x){return x==null?'-':x}).join(', '):'')+'</span>'+spark(v)+'</div></div>';
  });
  var mon=dkey(monday(now)),wk=0,lh=0;
  S.c.forEach(function(e){if(e.d>=mon)wk+=e.m;if(e.t==='Hike'&&e.k>lh)lh=e.k});
@@ -349,16 +385,26 @@ document.addEventListener('click',function(e){
   var on=S.done[dk][t.dataset.k];save();render();if(on&&!/^(warm|cardio)/.test(t.dataset.k))startRest();return}
  if(t.dataset.act==='addc'){var m=parseFloat(document.getElementById('cm').value),k=parseFloat(document.getElementById('ck').value);if(!(m>0)&&!(k>0))return;S.c.push({d:dkey(now),t:document.getElementById('ct').value,m:m>0?m:0,k:k>0?k:0});if(S.c.length>200)S.c.shift();save();render();return}
  if(t.dataset.del!=null){S.c.splice(+t.dataset.del,1);save();render();return}
- if(t.dataset.act==='reset'){delete S.done[dkey(now)];save();render()}
+ if(t.dataset.act==='reset'){var td=dkey(now);delete S.done[td];Object.keys(S.r).forEach(function(id){S.r[id]=S.r[id].filter(function(e){return e[0]!==td})});save();render()}
  if(t.dataset.act==='flip'){S.flip=!S.flip;save();render()}
  if(t.dataset.act==='export'){exportData();return}
  if(t.dataset.act==='import'){document.getElementById('imp').click();return}
- if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],style:S.style};save();render()}}
+ if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},style:S.style};save();render()}}
 });
+function patchHist(i,id){var ex=i.closest('.ex'),w=ex&&ex.querySelector('.hw');if(w)w.innerHTML=histHtml(id,ex.querySelectorAll('.rp').length)}
 document.addEventListener('change',function(e){
  var i=e.target;if(i.id==='imp'){if(i.files&&i.files[0])importData(i.files[0]);i.value='';return}if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>40)h.shift()}save();
   // Patch the history line in place: a full render would destroy whichever input the user just tapped into.
-  var p=i.closest('.ex');p=p&&p.querySelector('.hist');if(p)p.outerHTML=histHtml(id)}
+  patchHist(i,id)}
+ if(i.dataset&&i.dataset.r){var k=i.dataset.r,id=k.slice(0,k.lastIndexOf('-')),si=+k.slice(k.lastIndexOf('-')+1)-1,v=parseInt(i.value,10),t=dkey(now),ex=i.closest('.ex'),n=ex?ex.querySelectorAll('.rp').length:si+1;
+  if(isNaN(v)||v<0)v=null;
+  var R=S.r[id]=S.r[id]||[],e=R.length&&R[R.length-1][0]===t?R[R.length-1]:null;
+  if(!e){if(v==null)return;e=[t,[]];R.push(e);if(R.length>40)R.shift()}
+  for(var j=0;j<Math.max(n,e[1].length);j++)if(e[1][j]===undefined)e[1][j]=null;
+  e[1][si]=v;if(e[1].every(function(x){return x==null}))R.pop();
+  // Typing reps for a set means it is done: tick it and start the rest timer.
+  var D=S.done[t]=S.done[t]||{},fresh=v!=null&&!D[k];if(fresh)D[k]=1;
+  save();syncTicks();patchHist(i,id);if(fresh)startRest()}
  if(i.dataset&&i.dataset.n){S.n[i.dataset.n]=i.value.trim();save()}
 });
 // Rest timer counts against an end time, so a locked or backgrounded phone cannot make it drift.
@@ -377,10 +423,10 @@ function importData(file){
  var rd=new FileReader();
  rd.onload=function(){
   var d;try{d=JSON.parse(rd.result)}catch(e){d=null}
-  if(!isObj(d)||typeof d.start!=='string'||!/^\d{4}-\d\d-\d\d$/.test(d.start)||!['w','done','fin','h','n'].every(function(k){return d[k]==null||isObj(d[k])})||(d.c!=null&&!Array.isArray(d.c))){alert('That file is not a Gym Routine backup.');return}
+  if(!isObj(d)||typeof d.start!=='string'||!/^\d{4}-\d\d-\d\d$/.test(d.start)||!['w','done','fin','h','n','r'].every(function(k){return d[k]==null||isObj(d[k])})||(d.c!=null&&!Array.isArray(d.c))){alert('That file is not a Gym Routine backup.');return}
   var nf=Object.keys(d.fin||{}).length;
   if(!confirm('Replace everything on this device with this backup ('+nf+' session'+(nf===1?'':'s')+' finished)?'))return;
-  S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[]},d);S.flip=!!S.flip;
+  S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{}},d);S.flip=!!S.flip;
   save();applyStyle();render();
  };
  rd.readAsText(file);
