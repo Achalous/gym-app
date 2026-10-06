@@ -157,7 +157,7 @@ var W={
  B:{title:'Workout B',items:[['squat','Hack squat or goblet squat',3,'8-12'],['lat','Lat pulldown',3,'8-12'],['inc','Incline chest press',3,'8-12'],['hip','Hip thrust or back extension',2,'10-12'],['lat2','Lateral raise',2,'12-15'],['arms','Bicep curl and tricep pushdown',2,'10-15 each']]}
 };
 var DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-var tab='today',view='today';
+var tab='today',view='today',shownDay='';
 
 function pad(n){return n<10?'0'+n:''+n}
 function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
@@ -180,12 +180,15 @@ function plan(dow){
 
 var NAMES={};W.A.items.concat(W.B.items).forEach(function(x){NAMES[x[0]]=x[1]});
 function esc(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
-function extra(id){
+function histHtml(id){
  var hs=S.h[id]||[],t=dkey(now),prev=hs.filter(function(x){return x[0]!==t}),last=prev.length?prev[prev.length-1][1]:null,pb=0,pp=0,cur=S.w[id];
  hs.forEach(function(x){if(x[1]>pb)pb=x[1]});prev.forEach(function(x){if(x[1]>pp)pp=x[1]});
  var line=last!=null?'Last time '+last+' kg &middot; PB '+pb+' kg':'No history yet';
  var badge=(cur!=null&&pp>0&&cur>pp)?' <span class="pb">New PB</span>':'';
- return '<p class="hist">'+line+badge+'</p><input class="note" data-n="'+id+'" value="'+esc(S.n[id]||'')+'" placeholder="Seat and machine settings" aria-label="Settings note for '+esc(NAMES[id])+'">'+howHtml(id);
+ return '<p class="hist">'+line+badge+'</p>';
+}
+function extra(id){
+ return histHtml(id)+'<input class="note" data-n="'+id+'" value="'+esc(S.n[id]||'')+'" placeholder="Seat and machine settings" aria-label="Settings note for '+esc(NAMES[id])+'">'+howHtml(id);
 }
 var openHow=null,demoIx=0,raf=0;
 var DEMO={
@@ -267,15 +270,16 @@ function items(key,dow){
 }
 
 function render(){
- var dow=now.getDay(),today=sessionFor(dow);
+ var dow=now.getDay(),today=sessionFor(dow);shownDay=dkey(now);
  document.getElementById('h').textContent=DAYS[dow];
- document.getElementById('s').textContent=today?plan(dow)+' today. Week '+(weekIdx()%2===0?'1':'2')+' order'+(S.flip?' (flipped)':'')+' '+Object.keys(S.fin||{}).length+' sessions finished so far.':plan(dow)+' today. '+Object.keys(S.fin||{}).length+' sessions finished so far.';
  document.querySelectorAll('nav button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.tab===tab?'true':'false')});
  var el=document.getElementById('app');
  if(tab==='week')el.innerHTML=weekHtml();
  else if(tab==='progress')el.innerHTML=progressHtml();
  else if(tab==='notes')el.innerHTML=notesHtml();
  else el.innerHTML=workoutHtml(dow,today);
+ var nf=Object.keys(S.fin||{}).length;
+ document.getElementById('s').textContent=plan(dow)+' today. '+(today?'Week '+(weekIdx()%2===0?'1':'2')+' order'+(S.flip?' (flipped)':'')+'. ':'')+nf+' session'+(nf===1?'':'s')+' finished so far.';
  if(openHow&&tab==='today')startDemo();else stopDemo();
 }
 
@@ -293,7 +297,7 @@ function workoutHtml(dow,today){
   var wt=x[4]?'':'<label class="wt">kg <input type="number" inputmode="decimal" min="0" step="0.5" data-w="'+id+'" value="'+(S.w[id]!=null?S.w[id]:'')+'" placeholder="0" aria-label="Weight in kg for '+x[1]+'"></label>';
   return '<div class="ex'+(all?' ok':'')+'"><div class="top"><b>'+x[1]+'</b><span class="meta">'+(x[3]?n+' x '+x[3]:'')+'</span></div><div class="row"><div class="sets">'+pl+'</div>'+wt+'</div>'+(x[4]?'':extra(id))+'</div>';
  }).join('');
- var pct=tot?Math.round(dn/tot*100):0;if(view==='today'&&tot&&dn===tot&&!S.fin[dkey(now)]){S.fin[dkey(now)]=1;save()}
+ var pct=tot?Math.round(dn/tot*100):0;if(tot&&dn===tot&&!S.fin[dk]){S.fin[dk]=1;save()}
  var note=(view==='today'&&dow===5)?'<p class="small">Friday: first lift is down to 2 sets so your legs are fresh for Saturday.</p>':'';
  return h+'<div class="hero'+(dn===tot&&tot?' win':'')+'"><svg class="ring" viewBox="0 0 44 44" role="img" aria-label="'+pct+' percent complete"><circle class="rb" cx="22" cy="22" r="19"/><circle class="rf" cx="22" cy="22" r="19" style="stroke-dasharray:'+(pct*1.1938).toFixed(1)+' 119.4"/></svg><div><h2>'+W[key].title+' &middot; '+pct+'%</h2><p class="cnt">'+dn+' of '+tot+' done'+(dn===tot&&tot?'. Session complete, now eat.':'')+'</p></div></div>'+note+body+'<p class="small">Stop each set 1-2 reps short of failure. When you hit the top reps on every set, add a little weight next time. Weights save on this device.</p><button class="ghost" data-act="reset">Clear today\'s ticks</button>';
 }
@@ -345,20 +349,38 @@ document.addEventListener('click',function(e){
  if(t.dataset.del!=null){S.c.splice(+t.dataset.del,1);save();render();return}
  if(t.dataset.act==='reset'){delete S.done[dkey(now)];save();render()}
  if(t.dataset.act==='flip'){S.flip=!S.flip;save();render()}
- if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[]};save();render()}}
+ if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],style:S.style};save();render()}}
 });
 document.addEventListener('change',function(e){
- var i=e.target;if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>40)h.shift()}save();render()}
+ var i=e.target;if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>40)h.shift()}save();
+  // Patch the history line in place: a full render would destroy whichever input the user just tapped into.
+  var p=i.closest('.ex');p=p&&p.querySelector('.hist');if(p)p.outerHTML=histHtml(id)}
  if(i.dataset&&i.dataset.n){S.n[i.dataset.n]=i.value.trim();save()}
 });
-var rt=null,rl=0;
+// Rest timer counts against an end time, so a locked or backgrounded phone cannot make it drift.
+// The beep is scheduled on the audio clock up front, so it fires on time even if the interval is throttled.
+var rt=null,rl=0,rEnd=0,actx=null,beeps=[];
 function showRest(){var p=document.getElementById('rest');if(rl<=0){p.hidden=true;return}p.hidden=false;p.textContent='Rest '+Math.floor(rl/60)+':'+pad(rl%60)+' \u00b7 tap to skip'}
-function startRest(){clearInterval(rt);rl=90;showRest();rt=setInterval(function(){rl--;if(rl<=0){clearInterval(rt);try{navigator.vibrate&&navigator.vibrate(250)}catch(e){}}showRest()},1000)}
-document.getElementById('rest').addEventListener('click',function(){clearInterval(rt);rl=0;showRest()});
+function tickRest(){rl=Math.max(0,Math.ceil((rEnd-Date.now())/1000));if(rl<=0){clearInterval(rt);try{navigator.vibrate&&navigator.vibrate(250)}catch(e){}}showRest()}
+function stopBeeps(){beeps.forEach(function(o){try{o.stop()}catch(e){}});beeps=[]}
+function schedBeeps(sec){
+ try{var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;actx=actx||new AC();if(actx.state==='suspended')actx.resume();
+  [0,.3].forEach(function(off){var o=actx.createOscillator(),g=actx.createGain(),t0=actx.currentTime+sec+off;o.frequency.value=880;
+   g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.25,t0+.01);g.gain.linearRampToValueAtTime(0,t0+.18);
+   o.connect(g);g.connect(actx.destination);o.start(t0);o.stop(t0+.2);beeps.push(o)})}catch(e){}
+}
+function startRest(){clearInterval(rt);stopBeeps();rEnd=Date.now()+90e3;schedBeeps(90);tickRest();rt=setInterval(tickRest,1000)}
+document.getElementById('rest').addEventListener('click',function(){clearInterval(rt);stopBeeps();rEnd=0;rl=0;showRest()});
 var STY=[['ember','Ember'],['concrete','Concrete'],['paper','Paper'],['neon','Neon']];
 function applyStyle(){var s=S.style||'ember',d=document.documentElement;if(s==='ember')d.removeAttribute('data-style');else d.setAttribute('data-style',s);
  document.getElementById('st').innerHTML=STY.map(function(x){return '<button class="sp" data-style="'+x[0]+'" aria-pressed="'+(x[0]===s)+'">'+x[1]+'</button>'}).join('')}
 applyStyle();render();
+// An installed app can stay in memory for days, so move to the new day when it comes back or midnight passes.
+function refreshDay(){now=new Date();if(rEnd)tickRest();
+ if(dkey(now)!==shownDay&&!(document.activeElement&&document.activeElement.tagName==='INPUT')){view='today';render()}}
+document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshDay()});
+window.addEventListener('pageshow',refreshDay);
+setInterval(refreshDay,60e3);
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){try{navigator.serviceWorker.register('sw.js').catch(function(){})}catch(e){}}
 </script>
 </body>
