@@ -305,7 +305,9 @@ function workoutHtml(dow,today){
 function weekHtml(){
  var order=[1,2,3,4,5,6,0],td=now.getDay();
  var h=order.map(function(d){return '<div class="day'+(d===td?' now':'')+'"><span>'+DAYS[d]+'</span><span>'+plan(d)+(sessionFor(d)?', 9am':'')+'</span></div>'}).join('');
- return '<p class="small">Week '+(weekIdx()%2===0?'1':'2')+' order shown. It flips every week (A, B, A then B, A, B).</p>'+h+'<button class="ghost" data-act="flip">Flip A and B order</button><button class="ghost" data-act="wipe">Clear all saved data</button>';
+ return '<p class="small">Week '+(weekIdx()%2===0?'1':'2')+' order shown. It flips every week (A, B, A then B, A, B).</p>'+h+'<button class="ghost" data-act="flip">Flip A and B order</button><button class="ghost" data-act="wipe">Clear all saved data</button>'+
+ '<h2>Backup</h2><p class="small">Everything is saved only on this device. Export a backup now and then so you can restore it if you clear your browser or change phone. Last backup: '+(S.bk?S.bk.split('-').reverse().join('/'):'never')+'.</p>'+
+ '<button class="ghost" data-act="export">Export backup</button><button class="ghost" data-act="import">Import backup</button><input type="file" id="imp" accept="application/json,.json" hidden>';
 }
 
 function spark(vals){
@@ -349,16 +351,40 @@ document.addEventListener('click',function(e){
  if(t.dataset.del!=null){S.c.splice(+t.dataset.del,1);save();render();return}
  if(t.dataset.act==='reset'){delete S.done[dkey(now)];save();render()}
  if(t.dataset.act==='flip'){S.flip=!S.flip;save();render()}
+ if(t.dataset.act==='export'){exportData();return}
+ if(t.dataset.act==='import'){document.getElementById('imp').click();return}
  if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],style:S.style};save();render()}}
 });
 document.addEventListener('change',function(e){
- var i=e.target;if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>40)h.shift()}save();
+ var i=e.target;if(i.id==='imp'){if(i.files&&i.files[0])importData(i.files[0]);i.value='';return}if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>40)h.shift()}save();
   // Patch the history line in place: a full render would destroy whichever input the user just tapped into.
   var p=i.closest('.ex');p=p&&p.querySelector('.hist');if(p)p.outerHTML=histHtml(id)}
  if(i.dataset&&i.dataset.n){S.n[i.dataset.n]=i.value.trim();save()}
 });
 // Rest timer counts against an end time, so a locked or backgrounded phone cannot make it drift.
 // The beep is scheduled on the audio clock up front, so it fires on time even if the interval is throttled.
+function exportData(){
+ S.bk=dkey(new Date());save();
+ var name='gym-backup-'+S.bk+'.json',blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+ // iOS home-screen apps cannot download files, so hand the file to the share sheet on touch devices.
+ try{var f=new File([blob],name,{type:'application/json'});
+  if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:name}).catch(function(){});render();return}}catch(e){}
+ var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+ setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);render();
+}
+function isObj(v){return v!=null&&typeof v==='object'&&!Array.isArray(v)}
+function importData(file){
+ var rd=new FileReader();
+ rd.onload=function(){
+  var d;try{d=JSON.parse(rd.result)}catch(e){d=null}
+  if(!isObj(d)||typeof d.start!=='string'||!/^\d{4}-\d\d-\d\d$/.test(d.start)||!['w','done','fin','h','n'].every(function(k){return d[k]==null||isObj(d[k])})||(d.c!=null&&!Array.isArray(d.c))){alert('That file is not a Gym Routine backup.');return}
+  var nf=Object.keys(d.fin||{}).length;
+  if(!confirm('Replace everything on this device with this backup ('+nf+' session'+(nf===1?'':'s')+' finished)?'))return;
+  S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[]},d);S.flip=!!S.flip;
+  save();applyStyle();render();
+ };
+ rd.readAsText(file);
+}
 var rt=null,rl=0,rEnd=0,actx=null,beeps=[];
 function showRest(){var p=document.getElementById('rest');if(rl<=0){p.hidden=true;return}p.hidden=false;p.textContent='Rest '+Math.floor(rl/60)+':'+pad(rl%60)+' \u00b7 tap to skip'}
 function tickRest(){rl=Math.max(0,Math.ceil((rEnd-Date.now())/1000));if(rl<=0){clearInterval(rt);try{navigator.vibrate&&navigator.vibrate(250)}catch(e){}}showRest()}
