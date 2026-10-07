@@ -79,9 +79,17 @@ nav button{font-size:14px;padding:10px 2px}
 .pb{background:linear-gradient(135deg,var(--acc),#ff9a3d);color:#fff;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:800;margin-left:6px}
 .note{width:100%;margin-top:8px;padding:9px 11px;border:1px dashed var(--line);border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-size:14px}
 .spark{width:120px;height:32px;flex:none}
+.chart{display:block;width:100%;height:auto;margin-top:10px;touch-action:pan-y;cursor:crosshair}
+.chart text{font:600 10px system-ui;fill:var(--mute)}
+.chart .tip{fill:var(--ink);font-weight:800}
+.ents{margin-top:6px;font-size:13px;color:var(--mute)}.ents summary{cursor:pointer;font-weight:700}
+.ents ol{list-style:none;padding:0;margin:6px 0 0;max-height:180px;overflow:auto;font-variant-numeric:tabular-nums}
+.ents li{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line);margin:0}
+.plt{margin:4px 0 0;font-size:13px;color:var(--mute)}
+#upd{display:block;width:100%;margin:0 0 12px;padding:12px;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font:700 15px system-ui;cursor:pointer}
 .form{display:flex;gap:8px;margin-top:12px}
 .form select,.form input{min-width:0;flex:1;padding:10px 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px}
-.form input{width:62px}.form .chip{flex:none;padding:10px 16px}
+.form input{width:62px}.form input[type=date]{flex:2}.form .chip{flex:none;padding:10px 16px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 .styles{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto;padding:2px}
@@ -157,7 +165,7 @@ nav button{font-size:14px;padding:10px 2px}
 </main>
 <script>
 var K='gym-routine-v1';
-var S={start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{}};
+var S={start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[]};
 try{var r=JSON.parse(localStorage.getItem(K));if(r&&typeof r==='object'){S=Object.assign(S,r)}}catch(e){}
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
 
@@ -210,6 +218,20 @@ var VAR={
 var UNIT={};
 Object.keys(VAR).forEach(function(sl){VAR[sl].forEach(function(v){NAMES[v[0]]=v[1];TOP[v[0]]=v[2]?parseInt(v[2].split('-')[1],10):TOP[sl];if(v[3])UNIT[v[0]]=v[3]})});
 function variant(sl){var vs=VAR[sl];if(!vs)return null;for(var i=0;i<vs.length;i++)if(vs[i][0]===S.v[sl])return vs[i];return vs[0]}
+// Plate-loaded lifts: what to put on each side for the logged weight. Machines count plates only (not the
+// sled); the hip thrust assumes a 20 kg barbell.
+var PLATES=[25,20,15,10,5,2.5,1.25],PL={leg:0,squat:0,hip:20};
+function platesHtml(id){
+ if(!(id in PL)||!(S.w[id]>0))return '';
+ var bar=PL[id],side=(S.w[id]-bar)/2,out=[];if(side<=0)return '';
+ PLATES.forEach(function(p){while(side>=p-1e-9){out.push(p);side-=p}});
+ var left=Math.round(side*2*100)/100;
+ return '<p class="plt">'+(bar?'With a '+bar+' kg bar, each side: ':'Plates each side: ')+(out.length?out.join(' + '):'none')+(left>0?' (closest you can load, '+left+' kg short)':'')+'</p>';
+}
+// Rest between sets in seconds: longer for heavy compound lifts. Tapping the rest link on a card cycles it.
+var REST={leg:150,squat:150,goblet:120,chest:120,row:120,shp:120,lat:120,inc:120,hip:120},RESTS=[60,90,120,150,180];
+function restFor(id){return S.rest[id]||REST[id]||90}
+function mmss(sec){return Math.floor(sec/60)+':'+pad(sec%60)}
 // Suggested jump once every set hits the top of the rep range: bigger for the heavy lower-body lifts.
 var INC={leg:5,squat:5,hip:5};
 // S.r[id] holds [date, [reps per set]] for each session, oldest first.
@@ -228,10 +250,10 @@ function histHtml(id,n){
  var top=TOP[id],tr=repsOn(id,t),tip='';
  if(tr&&tr.length>=n&&topAll(tr,top))tip='Top of the range on every set. Add weight next time.';
  else if(lr&&topAll(lr[1],top)){var base=(lw&&lw[0]===lr[0])?lw[1]:last;if(base!=null&&!(cur>base))tip='Hit '+top+'+ reps on every set last time. Try '+(base+(INC[id]||2.5))+' kg today.'}
- return '<p class="hist">'+line+badge+'</p>'+(tip?'<p class="hist up">'+tip+'</p>':'');
+ return '<p class="hist">'+line+badge+'</p>'+(tip?'<p class="hist up">'+tip+'</p>':'')+platesHtml(id);
 }
 function extra(sl,id,n){
- return '<div class="hw">'+histHtml(id,n)+'</div>'+'<input class="note" data-n="'+id+'" value="'+esc(S.n[id]||'')+'" placeholder="Seat and machine settings" aria-label="Settings note for '+esc(NAMES[id])+'">'+howHtml(sl);
+ return '<div class="hw">'+histHtml(id,n)+'</div>'+'<input class="note" data-n="'+id+'" value="'+esc(S.n[id]||'')+'" placeholder="Seat and machine settings" aria-label="Settings note for '+esc(NAMES[id])+'">'+'<button class="how" data-rst="'+id+'" aria-label="Rest between sets for '+esc(NAMES[id])+', tap to change">Rest between sets: '+mmss(restFor(id))+'</button>'+howHtml(sl);
 }
 var openHow=null,demoIx=0,raf=0;
 var DEMO={
@@ -398,6 +420,33 @@ function weekHtml(){
  '<button class="ghost" data-act="export">Export backup</button><button class="ghost" data-act="import">Import backup</button><input type="file" id="imp" accept="application/json,.json" hidden>';
 }
 
+function ddmm(d){return d.slice(8)+'/'+d.slice(5,7)}
+// Line chart over real dates: one series, accent line, quiet axes, latest point marked, tap or hover for values.
+function chart(pts,unit,label){
+ if(pts.length<2)return '';
+ var W=320,H=132,L=34,R=12,T=14,B=20,t0=new Date(pts[0][0]).getTime(),t1=new Date(pts[pts.length-1][0]).getTime(),span=t1-t0||1;
+ var vs=pts.map(function(x){return x[1]}),mn=Math.min.apply(null,vs),mx=Math.max.apply(null,vs);if(mn===mx){mn-=1;mx+=1}
+ var xy=pts.map(function(x){return [L+(new Date(x[0]).getTime()-t0)/span*(W-L-R),T+(mx-x[1])/(mx-mn)*(H-T-B)]});
+ var o='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+T+'" y2="'+T+'" stroke="var(--line)" stroke-width="1"/><line x1="'+L+'" x2="'+(W-R)+'" y1="'+(H-B)+'" y2="'+(H-B)+'" stroke="var(--line)" stroke-width="1"/>';
+ o+='<text x="'+(L-6)+'" y="'+(T+3)+'" text-anchor="end">'+mx+'</text><text x="'+(L-6)+'" y="'+(H-B+3)+'" text-anchor="end">'+mn+'</text>';
+ o+='<text x="'+L+'" y="'+(H-5)+'">'+ddmm(pts[0][0])+'</text><text x="'+(W-R)+'" y="'+(H-5)+'" text-anchor="end">'+ddmm(pts[pts.length-1][0])+'</text>';
+ o+='<polyline points="'+xy.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1)}).join(' ')+'" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+ var lp=xy[xy.length-1];o+='<circle cx="'+lp[0].toFixed(1)+'" cy="'+lp[1].toFixed(1)+'" r="4" fill="var(--acc)" stroke="var(--card)" stroke-width="2"/>';
+ var data=xy.map(function(p,i){return [+p[0].toFixed(1),+p[1].toFixed(1),ddmm(pts[i][0])+' · '+pts[i][1]+' '+unit]});
+ var ents=pts.slice().reverse().map(function(x){return '<li><span>'+x[0].split('-').reverse().join('/')+'</span><span>'+x[1]+' '+unit+'</span></li>'}).join('');
+ return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(label)+': '+pts.length+' entries from '+vs[0]+' to '+vs[vs.length-1]+' '+unit+'" data-p="'+esc(JSON.stringify(data))+'" data-h="'+H+'" data-b="'+B+'" data-t="'+T+'">'+o+'<g class="hov"></g></svg>'+
+  '<details class="ents"><summary>All entries ('+pts.length+')</summary><ol>'+ents+'</ol></details>';
+}
+function chartHover(e){
+ var svg=e.target.closest&&e.target.closest('svg.chart');if(!svg)return;
+ var d=JSON.parse(svg.dataset.p),r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal,x=(e.clientX-r.left)/r.width*vb.width,best=0;
+ d.forEach(function(p,i){if(Math.abs(p[0]-x)<Math.abs(d[best][0]-x))best=i});
+ var p=d[best],H=+svg.dataset.h,B=+svg.dataset.b,T=+svg.dataset.t,tw=p[2].length*5.6+12,tx=Math.min(Math.max(p[0]-tw/2,2),vb.width-tw-2);
+ svg.querySelector('.hov').innerHTML='<line x1="'+p[0]+'" x2="'+p[0]+'" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--mute)" stroke-width="1" stroke-dasharray="2 3"/><circle cx="'+p[0]+'" cy="'+p[1]+'" r="4.5" fill="var(--acc)" stroke="var(--card)" stroke-width="2"/>'+
+  '<rect x="'+tx+'" y="0" width="'+tw+'" height="13" rx="4" fill="var(--card)" stroke="var(--line)"/><text class="tip" x="'+(tx+tw/2)+'" y="9.5" text-anchor="middle">'+p[2]+'</text>';
+}
+document.addEventListener('pointermove',chartHover);document.addEventListener('pointerdown',chartHover);
+document.addEventListener('pointerout',function(e){var svg=e.target.closest&&e.target.closest('svg.chart');if(svg&&!svg.contains(e.relatedTarget))svg.querySelector('.hov').innerHTML=''});
 function spark(vals){
  if(vals.length<2)return '';
  var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),r=mx-mn||1,n=vals.length;
@@ -409,25 +458,32 @@ function progressHtml(){
  if(!ids.length)h+='<p class="small">Log a weight on any lift and your history shows up here.</p>';
  ids.forEach(function(k){
   var v=S.h[k].map(function(x){return x[1]}),pb=Math.max.apply(null,v),d=v[v.length-1]-v[0];
-  h+='<div class="ex"><div class="top"><b>'+NAMES[k]+'</b><span class="meta">PB '+pb+' kg</span></div><div class="row"><span class="small">Started '+v[0]+' kg, now '+v[v.length-1]+' kg ('+(d>=0?'+':'')+d+')'+((S.r[k]||[]).length?'<br>Latest reps '+S.r[k][S.r[k].length-1][1].map(function(x){return x==null?'-':x}).join(', '):'')+'</span>'+spark(v)+'</div></div>';
+  h+='<div class="ex"><div class="top"><b>'+NAMES[k]+'</b><span class="meta">PB '+pb+' kg</span></div><div class="row"><span class="small">Started '+v[0]+' kg, now '+v[v.length-1]+' kg ('+(d>=0?'+':'')+d+')'+((S.r[k]||[]).length?'<br>Latest reps '+S.r[k][S.r[k].length-1][1].map(function(x){return x==null?'-':x}).join(', '):'')+'</span></div>'+chart(S.h[k],'kg',NAMES[k])+'</div>';
  });
  Object.keys(S.r).filter(function(k){return UNIT[k]==='sec'&&S.r[k].length}).forEach(function(k){
   var R=S.r[k],best=0;R.forEach(function(e){e[1].forEach(function(x){if(x>best)best=x})});
-  h+='<div class="ex"><div class="top"><b>'+NAMES[k]+'</b><span class="meta">Best '+best+' sec</span></div><div class="row"><span class="small">Latest holds '+R[R.length-1][1].map(function(x){return x==null?'-':x}).join(', ')+' sec</span>'+spark(R.map(function(e){return Math.max.apply(null,e[1].map(function(x){return x||0}))}))+'</div></div>';
+  h+='<div class="ex"><div class="top"><b>'+NAMES[k]+'</b><span class="meta">Best '+best+' sec</span></div><div class="row"><span class="small">Latest holds '+R[R.length-1][1].map(function(x){return x==null?'-':x}).join(', ')+' sec</span></div>'+chart(R.map(function(e){return [e[0],Math.max.apply(null,e[1].map(function(x){return x||0}))]}),'sec',NAMES[k]+' best hold')+'</div>';
  });
  if(!ids.length&&h.indexOf('class="ex"')>0)h=h.replace(/<p class="small">Log a weight.*?<\/p>/,'');
  var mon=dkey(monday(now)),wk=0,lh=0;
  S.c.forEach(function(e){if(e.d>=mon)wk+=e.m;if(e.t==='Hike'&&e.k>lh)lh=e.k});
- h+='<h2>Cardio and hikes</h2><div class="ex"><div class="top"><b>This week: '+wk+' min</b><span class="meta">Longest hike '+lh+' km</span></div><div class="form"><select id="ct" aria-label="Type"><option>Hike</option><option>Gym cardio</option></select><input id="cm" type="number" inputmode="decimal" min="0" placeholder="min" aria-label="Minutes"><input id="ck" type="number" inputmode="decimal" min="0" step="0.1" placeholder="km" aria-label="Distance in km"><button class="chip" data-act="addc">Add</button></div></div>';
- var rows=S.c.map(function(e,i){return [e,i]}).slice(-8).reverse();
+ h+='<h2>Cardio and hikes</h2><div class="ex"><div class="top"><b>This week: '+wk+' min</b><span class="meta">Longest hike '+lh+' km</span></div><div class="form"><select id="ct" aria-label="Type"><option>Hike</option><option>Gym cardio</option></select><input id="cm" type="number" inputmode="decimal" min="0" placeholder="min" aria-label="Minutes"><input id="ck" type="number" inputmode="decimal" min="0" step="0.1" placeholder="km" aria-label="Distance in km"></div><div class="form"><input id="cd" type="date" value="'+dkey(now)+'" max="'+dkey(now)+'" aria-label="Date"><button class="chip" data-act="addc">Add</button></div></div>';
+ var rows=S.c.map(function(e,i){return [e,i]}).sort(function(a,b){return a[0].d<b[0].d?1:a[0].d>b[0].d?-1:b[1]-a[1]}).slice(0,8);
  rows.forEach(function(x){var e=x[0];h+='<div class="day"><span>'+e.t+' &middot; '+e.d.slice(5).split('-').reverse().join('/')+'</span><span>'+(e.m?e.m+' min':'')+(e.m&&e.k?', ':'')+(e.k?e.k+' km':'')+' <button class="ghost" data-del="'+x[1]+'" aria-label="Delete entry" style="margin:0 0 0 6px;padding:4px 9px">x</button></span></div>'});
  return h;
 }
+function proteinFor(kg){function r5(v){return Math.round(v/5)*5}return r5(kg*1.6)+'-'+r5(kg*2.2)+' g'}
+function bwHtml(){
+ var b=S.bw,last=b.length?b[b.length-1]:null,first=b.length?b[0]:null,d=last?Math.round((last[1]-first[1])*10)/10:0;
+ return '<h2 style="margin-top:0">Bodyweight</h2><div class="ex"><div class="top"><b>'+(last?last[1]+' kg':'Not logged yet')+'</b><span class="meta">'+(last?ddmm(last[0]):'')+'</span></div>'+
+  (last?'<p class="hist">'+(b.length>1?(d>=0?'+':'')+d+' kg since '+first[0].split('-').reverse().join('/')+'. ':'')+'Protein target: <b>'+proteinFor(last[1])+'</b> a day.</p>':'<p class="hist">Weigh in now and then, same time of day, and the app works out your daily protein target.</p>')+
+  '<div class="form"><input id="bwi" type="number" inputmode="decimal" min="20" max="400" step="0.1" placeholder="kg" aria-label="Bodyweight in kg"><button class="chip" data-act="bw">Save</button></div>'+chart(b,'kg','Bodyweight')+'</div>';
+}
 function notesHtml(){
  var t=[['8:00','Wake up, drink water'],['8:15-8:30','Light carb snack: banana, toast with peanut butter or cereal'],['9:00-10:00','Gym'],['10:30-11:00','Proper meal with protein and carbs'],['Before 2pm','Meal or solid snack before your shift'],['After 10pm','Protein-rich meal, then sleep']];
- return '<h2 style="margin-top:0">Training mornings</h2>'+t.map(function(x){return '<div class="t"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>'}).join('')+
+ return bwHtml()+'<h2>Training mornings</h2>'+t.map(function(x){return '<div class="t"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>'}).join('')+
  '<h2>Equipment at Vision Gateshead</h2><ul><li>Hammer Strength plate-loaded machines and a full pin-loaded (selectorised) range, with multiples of the popular machines.</li><li>Mirrored dumbbell area from 2.5 to 60 kg, 16 adjustable benches, fixed-weight curl bars and preacher benches.</li><li>Life Fitness cardio and HIIT machines.</li><li>They do not publish a machine-by-machine list, so ask staff to point out each one on your first visit.</li></ul><h2>Cardio</h2><ul><li>Keep gym cardio at a talking pace and add a couple of minutes each week.</li><li>Saturday\'s hike is your main cardio. Build distance or elevation gradually.</li><li>After a month, turn one finisher into intervals: 6 rounds of 1 min hard, 2 min easy.</li></ul>'+
- '<h2>Food and recovery</h2><ul><li>Eating enough matters most for building muscle with your job.</li><li>Aim for roughly 1.6-2.2 g protein per kg of bodyweight daily, plus plenty of carbs.</li><li>Protect your sleep after late finishes.</li><li>If lifts stall for 2-3 weeks or you feel flat at work, eat and sleep more first, then drop the cardio finishers.</li></ul>';
+ '<h2>Food and recovery</h2><ul><li>Eating enough matters most for building muscle with your job.</li><li>Aim for roughly 1.6-2.2 g protein per kg of bodyweight daily'+(S.bw.length?' (that\'s '+proteinFor(S.bw[S.bw.length-1][1])+' for you)':'')+', plus plenty of carbs.</li><li>Protect your sleep after late finishes.</li><li>If lifts stall for 2-3 weeks or you feel flat at work, eat and sleep more first, then drop the cardio finishers.</li></ul>';
 }
 
 document.addEventListener('click',function(e){
@@ -437,32 +493,35 @@ document.addEventListener('click',function(e){
  if(t.dataset.dm!=null){demoIx=+t.dataset.dm;render();return}
  if(t.dataset.tab){tab=t.dataset.tab;render();return}
  if(t.dataset.view){view=t.dataset.view;render();return}
+ if(t.dataset.rst){var rid=t.dataset.rst,cur=restFor(rid),nx=RESTS[(RESTS.indexOf(cur)+1)%RESTS.length];if(nx===(REST[rid]||90))delete S.rest[rid];else S.rest[rid]=nx;save();t.textContent='Rest between sets: '+mmss(nx);return}
  if(t.dataset.var){var vp=t.dataset.var.split(':');S.v[vp[0]]=vp[1];save();render();return}
  if(t.dataset.k){var dk=dkey(now);S.done[dk]=S.done[dk]||{};if(S.done[dk][t.dataset.k])delete S.done[dk][t.dataset.k];else S.done[dk][t.dataset.k]=1;
   var ks=Object.keys(S.done);if(ks.length>60){ks.sort();ks.slice(0,ks.length-60).forEach(function(k){delete S.done[k]})}
-  var on=S.done[dk][t.dataset.k];save();render();if(on&&!/^(warm|cardio)/.test(t.dataset.k))startRest();return}
- if(t.dataset.act==='addc'){var m=parseFloat(document.getElementById('cm').value),k=parseFloat(document.getElementById('ck').value);if(!(m>0)&&!(k>0))return;S.c.push({d:dkey(now),t:document.getElementById('ct').value,m:m>0?m:0,k:k>0?k:0});if(S.c.length>200)S.c.shift();save();render();return}
+  var on=S.done[dk][t.dataset.k],sl=t.dataset.k.slice(0,t.dataset.k.lastIndexOf('-')),va=variant(sl);save();render();if(on&&!/^(warm|cardio)$/.test(sl))startRest(restFor(va?va[0]:sl));return}
+ if(t.dataset.act==='addc'){var m=parseFloat(document.getElementById('cm').value),k=parseFloat(document.getElementById('ck').value);if(!(m>0)&&!(k>0))return;var cd=document.getElementById('cd').value;if(!/^\d{4}-\d\d-\d\d$/.test(cd)||cd>dkey(now))cd=dkey(now);S.c.push({d:cd,t:document.getElementById('ct').value,m:m>0?m:0,k:k>0?k:0});if(S.c.length>400)S.c.shift();save();render();return}
+ if(t.dataset.act==='bw'){var bw=parseFloat(document.getElementById('bwi').value),td=dkey(now);if(!(bw>=20&&bw<=400))return;bw=Math.round(bw*10)/10;
+  if(S.bw.length&&S.bw[S.bw.length-1][0]===td)S.bw[S.bw.length-1][1]=bw;else S.bw.push([td,bw]);if(S.bw.length>400)S.bw.shift();save();render();return}
  if(t.dataset.del!=null){S.c.splice(+t.dataset.del,1);save();render();return}
  if(t.dataset.act==='reset'){var td=dkey(now);delete S.done[td];Object.keys(S.r).forEach(function(id){S.r[id]=S.r[id].filter(function(e){return e[0]!==td})});save();render()}
  if(t.dataset.act==='flip'){S.flip=!S.flip;save();render()}
  if(t.dataset.act==='export'){exportData();return}
  if(t.dataset.act==='import'){document.getElementById('imp').click();return}
- if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},style:S.style};save();render()}}
+ if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[],style:S.style};save();render()}}
 });
 function patchHist(i,id){var ex=i.closest('.ex'),w=ex&&ex.querySelector('.hw');if(w)w.innerHTML=histHtml(id,ex.querySelectorAll('.rp').length)}
 document.addEventListener('change',function(e){
- var i=e.target;if(i.id==='imp'){if(i.files&&i.files[0])importData(i.files[0]);i.value='';return}if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>40)h.shift()}save();
+ var i=e.target;if(i.id==='imp'){if(i.files&&i.files[0])importData(i.files[0]);i.value='';return}if(i.dataset&&i.dataset.w){var id=i.dataset.w,v=parseFloat(i.value);if(isNaN(v))delete S.w[id];else{S.w[id]=v;var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)h[h.length-1][1]=v;else h.push([t,v]);if(h.length>400)h.shift()}save();
   // Patch the history line in place: a full render would destroy whichever input the user just tapped into.
   patchHist(i,id)}
  if(i.dataset&&i.dataset.r){var k=i.dataset.r,id=k.slice(0,k.lastIndexOf('-')),si=+k.slice(k.lastIndexOf('-')+1)-1,v=parseInt(i.value,10),t=dkey(now),ex=i.closest('.ex'),n=ex?ex.querySelectorAll('.rp').length:si+1;
   if(isNaN(v)||v<0)v=null;
   var R=S.r[id]=S.r[id]||[],e=R.length&&R[R.length-1][0]===t?R[R.length-1]:null;
-  if(!e){if(v==null)return;e=[t,[]];R.push(e);if(R.length>40)R.shift()}
+  if(!e){if(v==null)return;e=[t,[]];R.push(e);if(R.length>400)R.shift()}
   for(var j=0;j<Math.max(n,e[1].length);j++)if(e[1][j]===undefined)e[1][j]=null;
   e[1][si]=v;if(e[1].every(function(x){return x==null}))R.pop();
   // Typing reps for a set means it is done: tick it and start the rest timer.
   var tk=i.dataset.t||k,D=S.done[t]=S.done[t]||{},fresh=v!=null&&!D[tk];if(fresh)D[tk]=1;
-  save();syncTicks();patchHist(i,id);if(fresh)startRest()}
+  save();syncTicks();patchHist(i,id);if(fresh)startRest(restFor(id))}
  if(i.dataset&&i.dataset.n){S.n[i.dataset.n]=i.value.trim();save()}
 });
 // Rest timer counts against an end time, so a locked or backgrounded phone cannot make it drift.
@@ -481,10 +540,10 @@ function importData(file){
  var rd=new FileReader();
  rd.onload=function(){
   var d;try{d=JSON.parse(rd.result)}catch(e){d=null}
-  if(!isObj(d)||typeof d.start!=='string'||!/^\d{4}-\d\d-\d\d$/.test(d.start)||!['w','done','fin','h','n','r','v'].every(function(k){return d[k]==null||isObj(d[k])})||(d.c!=null&&!Array.isArray(d.c))){alert('That file is not a Gym Routine backup.');return}
+  if(!isObj(d)||typeof d.start!=='string'||!/^\d{4}-\d\d-\d\d$/.test(d.start)||!['w','done','fin','h','n','r','v','rest'].every(function(k){return d[k]==null||isObj(d[k])})||['c','bw'].some(function(k){return d[k]!=null&&!Array.isArray(d[k])})){alert('That file is not a Gym Routine backup.');return}
   var nf=Object.keys(d.fin||{}).length;
   if(!confirm('Replace everything on this device with this backup ('+nf+' session'+(nf===1?'':'s')+' finished)?'))return;
-  S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{}},d);S.flip=!!S.flip;
+  S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[]},d);S.flip=!!S.flip;
   save();applyStyle();render();
  };
  rd.readAsText(file);
@@ -499,7 +558,7 @@ function schedBeeps(sec){
    g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.25,t0+.01);g.gain.linearRampToValueAtTime(0,t0+.18);
    o.connect(g);g.connect(actx.destination);o.start(t0);o.stop(t0+.2);beeps.push(o)})}catch(e){}
 }
-function startRest(){clearInterval(rt);stopBeeps();rEnd=Date.now()+90e3;schedBeeps(90);tickRest();rt=setInterval(tickRest,1000)}
+function startRest(sec){sec=sec||90;clearInterval(rt);stopBeeps();rEnd=Date.now()+sec*1e3;schedBeeps(sec);tickRest();rt=setInterval(tickRest,1000)}
 document.getElementById('rest').addEventListener('click',function(){clearInterval(rt);stopBeeps();rEnd=0;rl=0;showRest()});
 var STY=[['ember','Ember'],['concrete','Concrete'],['paper','Paper'],['neon','Neon']];
 function applyStyle(){var s=S.style||'ember',d=document.documentElement;if(s==='ember')d.removeAttribute('data-style');else d.setAttribute('data-style',s);
@@ -511,6 +570,16 @@ function refreshDay(){now=new Date();if(rEnd)tickRest();
 document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshDay()});
 window.addEventListener('pageshow',refreshDay);
 setInterval(refreshDay,60e3);
+// When the app comes back to the foreground, check whether a newer page has been published and offer a reload.
+var baseSrc=null,lastCheck=0;
+function checkUpdate(){
+ if(!/^https?:$/.test(location.protocol)||Date.now()-lastCheck<6e5&&baseSrc!=null)return;lastCheck=Date.now();
+ fetch(location.pathname,{cache:'no-store'}).then(function(r){return r.ok?r.text():null}).then(function(t){
+  if(t==null)return;if(baseSrc==null){baseSrc=t;return}
+  if(t!==baseSrc&&!document.getElementById('upd')){var b=document.createElement('button');b.id='upd';b.textContent='New version available. Tap to update.';b.onclick=function(){location.reload()};document.querySelector('nav').before(b)}
+ }).catch(function(){});
+}
+checkUpdate();document.addEventListener('visibilitychange',function(){if(!document.hidden)checkUpdate()});
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){try{navigator.serviceWorker.register('sw.js').catch(function(){})}catch(e){}}
 </script>
 </body>
