@@ -56,6 +56,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .rp{width:48px;padding:6px 2px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;font-weight:700;text-align:center;-moz-appearance:textfield}
 .rp::-webkit-inner-spin-button,.rp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .hist.up{color:var(--done)}
+.msg.catch{border:2px solid var(--acc)}.cbtns{display:flex;gap:6px;margin-top:12px}
 .vars{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .vb{border:1px solid var(--line);background:transparent;color:var(--mute);padding:6px 11px;border-radius:99px;font:600 13px system-ui;cursor:pointer}
 .vb[aria-pressed="true"]{color:var(--ink);border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
@@ -64,6 +65,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .day{display:flex;justify-content:space-between;padding:13px 16px;background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 0 8px;box-shadow:var(--sh)}
 .day.now{border:2px solid var(--acc);background:linear-gradient(135deg,rgba(255,107,44,.12),var(--card))}
 .day span:first-child{font-weight:800}.day span:last-child{color:var(--mute);text-align:right}
+.day>span:last-child .ok{color:var(--done);font-weight:800}.day>span:last-child .miss{color:var(--acc);font-weight:800}
 h2{font-size:18px;margin:20px 0 8px}
 ul{padding-left:20px;margin:0 0 6px}li{margin:0 0 6px}
 .t{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -171,14 +173,26 @@ function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDat
 function monday(d){var m=new Date(d.getFullYear(),d.getMonth(),d.getDate());m.setDate(m.getDate()-((m.getDay()+6)%7));return m}
 var now=new Date();
 if(!S.start){S.start=dkey(monday(now));save()}
-function weekIdx(){var a=monday(now),p=S.start.split('-'),b=new Date(+p[0],+p[1]-1,+p[2]);return Math.round((a-b)/(7*864e5))}
-function swapped(){return (weekIdx()%2!==0)!==S.flip}
-function sessionFor(dow){
+function weekIdx(d){var a=monday(d||now),p=S.start.split('-'),b=new Date(+p[0],+p[1]-1,+p[2]);return Math.round((a-b)/(7*864e5))}
+function swapped(d){return (weekIdx(d)%2!==0)!==S.flip}
+function sessionFor(dow,d){
  var order={1:0,3:1,5:2};
  if(!(dow in order))return null;
- var a=swapped()?['B','A','B']:['A','B','A'];
+ var a=swapped(d)?['B','A','B']:['A','B','A'];
  return a[order[dow]];
 }
+// S.fin[date] is the workout finished that day ('A' or 'B'); older saves stored 1, meaning the planned one.
+function finOn(d){var f=S.fin[dkey(d)];return f===1?sessionFor(d.getDay(),d):f||null}
+// This week's days with what was planned and done. A planned session counts as made up when the same
+// workout was finished on another day this week that wasn't itself covering its own plan.
+function weekState(){
+ var m=monday(now),t=dkey(now),days=[],spare=[];
+ for(var i=0;i<7;i++){var d=new Date(m.getFullYear(),m.getMonth(),m.getDate()+i),p=sessionFor(d.getDay(),d),f=finOn(d);
+  days.push({d:d,k:dkey(d),dow:d.getDay(),plan:p,done:f,past:dkey(d)<t});if(f&&f!==p)spare.push(f)}
+ days.forEach(function(x){if(x.plan&&x.done!==x.plan&&x.past){var j=spare.indexOf(x.plan);if(j>=0){spare.splice(j,1);x.madeUp=1}else x.missed=1}});
+ return days;
+}
+function owed(){return weekState().filter(function(x){return x.missed})}
 function plan(dow){
  var s=sessionFor(dow);
  if(s)return s==='A'?'Workout A':'Workout B';
@@ -316,11 +330,11 @@ function subText(){
  var dow=now.getDay(),nf=Object.keys(S.fin||{}).length;
  return plan(dow)+' today. '+(sessionFor(dow)?'Week '+(weekIdx()%2===0?'1':'2')+' order'+(S.flip?' (flipped)':'')+'. ':'')+nf+' session'+(nf===1?'':'s')+' finished so far.';
 }
-function heroHtml(title,dn,tot){
+function heroHtml(title,dn,tot,key){
  var pct=tot?Math.round(dn/tot*100):0,win=dn===tot&&tot;
- return '<div class="hero'+(win?' win':'')+'" data-title="'+esc(title)+'"><svg class="ring" viewBox="0 0 44 44" role="img" aria-label="'+pct+' percent complete"><circle class="rb" cx="22" cy="22" r="19"/><circle class="rf" cx="22" cy="22" r="19" style="stroke-dasharray:'+(pct*1.1938).toFixed(1)+' 119.4"/></svg><div><h2>'+title+' &middot; '+pct+'%</h2><p class="cnt">'+dn+' of '+tot+' done'+(win?'. Session complete, now eat.':'')+'</p></div></div>';
+ return '<div class="hero'+(win?' win':'')+'" data-title="'+esc(title)+'" data-key="'+key+'"><svg class="ring" viewBox="0 0 44 44" role="img" aria-label="'+pct+' percent complete"><circle class="rb" cx="22" cy="22" r="19"/><circle class="rf" cx="22" cy="22" r="19" style="stroke-dasharray:'+(pct*1.1938).toFixed(1)+' 119.4"/></svg><div><h2>'+title+' &middot; '+pct+'%</h2><p class="cnt">'+dn+' of '+tot+' done'+(win?'. Session complete, now eat.':'')+'</p></div></div>';
 }
-function markFin(dk,dn,tot){if(tot&&dn===tot&&!S.fin[dk]){S.fin[dk]=1;save()}}
+function markFin(dk,dn,tot,key){if(tot&&dn===tot&&!S.fin[dk]){S.fin[dk]=key;save()}}
 // Update ticks, the progress ring and the subtitle in place, so typing reps never loses focus to a full render.
 function syncTicks(){
  var dk=dkey(now),D=S.done[dk]||{},tot=0,dn=0;
@@ -328,14 +342,30 @@ function syncTicks(){
   ps.forEach(function(p){var on=!!D[p.dataset.k];p.setAttribute('aria-pressed',on);tot++;if(on)dn++;else all=false});
   if(ps.length)ex.classList.toggle('ok',all)});
  var hero=document.querySelector('#app .hero');
- if(hero){var tmp=document.createElement('div');tmp.innerHTML=heroHtml(hero.dataset.title,dn,tot);var nh=tmp.firstChild;
+ if(hero){var tmp=document.createElement('div');tmp.innerHTML=heroHtml(hero.dataset.title,dn,tot,hero.dataset.key);var nh=tmp.firstChild;
   if(nh.className===hero.className)hero.innerHTML=nh.innerHTML;else hero.replaceWith(nh)}
- markFin(dk,dn,tot);document.getElementById('s').textContent=subText();
+ markFin(dk,dn,tot,hero&&hero.dataset.key);document.getElementById('s').textContent=subText();
+}
+// Prompt to make up this week's missed sessions. Missed sessions don't carry over into the next week.
+function catchUp(today){
+ if(view!=='today')return '';
+ var ms=owed();if(!ms.length)return '';
+ var dow=now.getDay(),names=ms.map(function(x){return DAYS[x.dow]+'\'s Workout '+x.plan}),list=names.length>1?names.slice(0,-1).join(', ')+' and '+names[names.length-1]:names[0];
+ var keys=[];ms.forEach(function(x){if(keys.indexOf(x.plan)<0&&x.plan!==today)keys.push(x.plan)});
+ var btns=keys.map(function(k){return '<button class="chip" data-view="'+k+'">'+(today?'Do Workout '+k+' instead':'Do Workout '+k+' today')+'</button>'}).join('');
+ var tip=today&&dow===5?(keys.length?'There are no rest days left before the hike, so swap if you\'d rather do it, or let it go and start fresh on Monday.':'Let it go and start fresh on Monday.')
+  :today?(keys.length?'Stick with today\'s plan and catch up on a rest day if you can, or swap.':'Catch up on a rest day if you can.')
+  :dow===6?'Saturday is for the hike, so it\'s fine to let it go and start fresh on Monday. If you do lift, keep it light.'
+  :dow===0?'Sunday is full rest. Let it go and start fresh on Monday.'
+  :'Got time today? It still counts for this week.';
+ if(dow===0)btns='';
+ return '<div class="msg catch"><b>'+(today?'Catch-up':'Missed this week')+'</b>You missed '+list+'. '+tip+(btns?'<div class="cbtns">'+btns+'</div>':'')+'</div>';
 }
 function workoutHtml(dow,today){
  var key=view==='today'?today:view;
  var h='<div class="chips" role="group" aria-label="Choose workout"><button class="chip" data-view="today" aria-pressed="'+(view==='today')+'">Today</button><button class="chip" data-view="A" aria-pressed="'+(view==='A')+'">Workout A</button><button class="chip" data-view="B" aria-pressed="'+(view==='B')+'">Workout B</button></div>';
  if(!key){
+  var cu=catchUp(null);if(cu)return h+cu;
   return h+'<div class="msg"><b>'+plan(dow)+'</b>No lifting planned. '+(dow===6?'Enjoy the hike and eat well before you set off.':dow===0?'Recovery day. Next lifting session is Monday.':'Rest up. Your next session is the next lifting day.')+' Pick Workout A or B above if you want to look one over.</div>';
  }
  var dk=dkey(now),D=S.done[dk]||{},list=items(key,view==='today'?dow:-1),tot=0,dn=0;
@@ -351,15 +381,19 @@ function workoutHtml(dow,today){
   var vars=va?'<div class="vars" role="group" aria-label="Which lift">'+VAR[sl].map(function(v){return '<button class="vb" data-var="'+sl+':'+v[0]+'" aria-pressed="'+(v[0]===id)+'">'+v[1]+'</button>'}).join('')+'</div>':'';
   return '<div class="ex'+(all?' ok':'')+'"><div class="top"><b>'+nm+'</b><span class="meta">'+(rg?n+' x '+rg+(sec?' sec':''):'')+'</span></div>'+vars+'<div class="row"><div class="sets">'+pl+'</div>'+wt+'</div>'+(x[4]?'':extra(sl,id,n))+'</div>';
  }).join('');
- markFin(dk,dn,tot);
+ markFin(dk,dn,tot,key);
  var note=(view==='today'&&dow===5)?'<p class="small">Friday: first lift is down to 2 sets so your legs are fresh for Saturday.</p>':'';
- return h+heroHtml(W[key].title,dn,tot)+note+body+'<p class="small">Stop each set 1-2 reps short of failure. Type the reps you did under each set; when you hit the top of the range on every set, the app will tell you to add weight. Everything saves on this device.</p><button class="ghost" data-act="reset">Clear today\'s sets</button>';
+ return h+catchUp(today)+heroHtml(W[key].title,dn,tot,key)+note+body+'<p class="small">Stop each set 1-2 reps short of failure. Type the reps you did under each set; when you hit the top of the range on every set, the app will tell you to add weight. Everything saves on this device.</p><button class="ghost" data-act="reset">Clear today\'s sets</button>';
 }
 
 function weekHtml(){
- var order=[1,2,3,4,5,6,0],td=now.getDay();
- var h=order.map(function(d){return '<div class="day'+(d===td?' now':'')+'"><span>'+DAYS[d]+'</span><span>'+plan(d)+(sessionFor(d)?', 9am':'')+'</span></div>'}).join('');
- return '<p class="small">Week '+(weekIdx()%2===0?'1':'2')+' order shown. It flips every week (A, B, A then B, A, B).</p>'+h+'<button class="ghost" data-act="flip">Flip A and B order</button><button class="ghost" data-act="wipe">Clear all saved data</button>'+
+ var ws=weekState(),pl=0,dn=0;
+ var h=ws.map(function(x){var st='';if(x.plan)pl++;if(x.done)dn++;
+  if(x.done)st=' <span class="ok">&#10003; '+(x.done!==x.plan?'did Workout '+x.done:'done')+'</span>';
+  else if(x.madeUp)st=' <span class="ok">made up</span>';
+  else if(x.missed)st=' <span class="miss">missed</span>';
+  return '<div class="day'+(x.k===dkey(now)?' now':'')+'"><span>'+DAYS[x.dow]+'</span><span>'+plan(x.dow)+(x.plan&&!x.done&&!x.past?', 9am':'')+st+'</span></div>'}).join('');
+ return '<p class="small"><b>'+dn+' of '+pl+' sessions done this week.</b> Missed one? Do it on a rest day and it counts; anything still missed is dropped when the new week starts.</p><p class="small">Week '+(weekIdx()%2===0?'1':'2')+' order shown. It flips every week (A, B, A then B, A, B).</p>'+h+'<button class="ghost" data-act="flip">Flip A and B order</button><button class="ghost" data-act="wipe">Clear all saved data</button>'+
  '<h2>Backup</h2><p class="small">Everything is saved only on this device. Export a backup now and then so you can restore it if you clear your browser or change phone. Last backup: '+(S.bk?S.bk.split('-').reverse().join('/'):'never')+'.</p>'+
  '<button class="ghost" data-act="export">Export backup</button><button class="ghost" data-act="import">Import backup</button><input type="file" id="imp" accept="application/json,.json" hidden>';
 }
