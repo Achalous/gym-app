@@ -335,6 +335,21 @@ function items(key,dow){
  return out;
 }
 
+// A session counts once every lifting set is ticked; the warm-up and cooldown cardio are optional.
+// Backfill days from before that rule where the lifts were all done but the cooldown tick was missed.
+function backfillFin(){
+ var ch=false;
+ Object.keys(S.done||{}).forEach(function(dk){
+  if(S.fin[dk])return;
+  var D=S.done[dk],p=dk.split('-'),dow=new Date(+p[0],+p[1]-1,+p[2]).getDay();
+  ['A','B'].forEach(function(key){
+   if(S.fin[dk])return;
+   var its=items(key,dow).filter(function(x){return !x[4]});
+   if(its.length&&its.every(function(x){for(var i=1;i<=x[2];i++){if(!D[x[0]+'-'+i])return false}return true})){S.fin[dk]=key;ch=true}
+  });
+ });
+ if(ch)save();
+}
 function render(){
  var dow=now.getDay(),today=sessionFor(dow);shownDay=dkey(now);
  document.getElementById('h').textContent=DAYS[dow];
@@ -361,7 +376,7 @@ function markFin(dk,dn,tot,key){if(tot&&dn===tot&&!S.fin[dk]){S.fin[dk]=key;save
 function syncTicks(){
  var dk=dkey(now),D=S.done[dk]||{},tot=0,dn=0;
  document.querySelectorAll('#app .ex').forEach(function(ex){var ps=ex.querySelectorAll('.plate'),all=true;
-  ps.forEach(function(p){var on=!!D[p.dataset.k];p.setAttribute('aria-pressed',on);tot++;if(on)dn++;else all=false});
+  ps.forEach(function(p){var on=!!D[p.dataset.k],opt=/^(warm|cardio)-/.test(p.dataset.k);p.setAttribute('aria-pressed',on);if(!opt){tot++;if(on)dn++}if(!opt&&!on)all=false});
   if(ps.length)ex.classList.toggle('ok',all)});
  var hero=document.querySelector('#app .hero');
  if(hero){var tmp=document.createElement('div');tmp.innerHTML=heroHtml(hero.dataset.title,dn,tot,hero.dataset.key);var nh=tmp.firstChild;
@@ -394,7 +409,7 @@ function workoutHtml(dow,today){
  var body=list.map(function(x){
   // Ticks stay on the slot (sl) so switching variant mid-session keeps them; logged numbers go to the variant (id).
   var sl=x[0],va=variant(sl),id=va?va[0]:sl,nm=va?va[1]:x[1],rg=va&&va[2]||x[3],sec=UNIT[id]==='sec',n=x[2],all=true,pl='',tr=x[4]?null:repsOn(id,dk)||[],lr=x[4]?null:lastReps(id);
-  for(var i=1;i<=n;i++){var k=sl+'-'+i,on=!!D[k];tot++;if(on)dn++;else all=false;
+  for(var i=1;i<=n;i++){var k=sl+'-'+i,on=!!D[k];if(!x[4]){tot++;if(on)dn++}if(!on)all=false;
    var b='<button class="plate" data-k="'+k+'" aria-pressed="'+on+'" aria-label="'+nm+' set '+i+'">'+i+'</button>';
    if(!x[4]){var lv=lr&&lr[1][i-1]!=null?lr[1][i-1]:'',u=sec?'sec':'reps',ul=sec?'Seconds':'Reps';
     b='<div class="set">'+b+'<input class="rp" type="number" inputmode="numeric" min="0" max="999" step="1" data-r="'+id+'-'+i+'" data-t="'+k+'" value="'+(tr[i-1]!=null?tr[i-1]:'')+'" placeholder="'+(lv!==''?lv:u)+'" aria-label="'+ul+' for '+nm+' set '+i+(lv!==''?', '+lv+' last time':'')+'"></div>'}
@@ -544,7 +559,7 @@ function importData(file){
   var nf=Object.keys(d.fin||{}).length;
   if(!confirm('Replace everything on this device with this backup ('+nf+' session'+(nf===1?'':'s')+' finished)?'))return;
   S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[]},d);S.flip=!!S.flip;
-  save();applyStyle();render();
+  backfillFin();save();applyStyle();render();
  };
  rd.readAsText(file);
 }
@@ -563,7 +578,7 @@ document.getElementById('rest').addEventListener('click',function(){clearInterva
 var STY=[['ember','Ember'],['concrete','Concrete'],['paper','Paper'],['neon','Neon']];
 function applyStyle(){var s=S.style||'ember',d=document.documentElement;if(s==='ember')d.removeAttribute('data-style');else d.setAttribute('data-style',s);
  document.getElementById('st').innerHTML=STY.map(function(x){return '<button class="sp" data-style="'+x[0]+'" aria-pressed="'+(x[0]===s)+'">'+x[1]+'</button>'}).join('')}
-applyStyle();render();
+backfillFin();applyStyle();render();
 // An installed app can stay in memory for days, so move to the new day when it comes back or midnight passes.
 function refreshDay(){now=new Date();if(rEnd)tickRest();
  if(dkey(now)!==shownDay&&!(document.activeElement&&document.activeElement.tagName==='INPUT')){view='today';render()}}
