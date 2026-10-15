@@ -74,10 +74,15 @@ ul{padding-left:20px;margin:0 0 6px}li{margin:0 0 6px}
 .ghost{background:none;border:1px solid var(--line);color:var(--mute);border-radius:10px;padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;margin:6px 6px 0 0}
 #rest{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));border:0;border-radius:99px;padding:14px 22px;background:linear-gradient(135deg,var(--acc),#ff9a3d);color:#fff;font:800 16px system-ui;box-shadow:0 10px 28px rgba(255,107,44,.5);cursor:pointer;z-index:9}
 #rest[hidden]{display:none}
+#rest{white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#rest.go{background:linear-gradient(135deg,var(--done),#7dffc4);color:#06281c;animation:pulse .6s ease-in-out 4}
+@keyframes pulse{50%{transform:translateX(-50%) scale(1.08)}}
+.danger{color:#d33;border-color:#d33}
+#warn{display:block;margin:0 0 12px;padding:12px;border-radius:12px;background:#d33;color:#fff;font:700 14px system-ui}
 nav button{font-size:14px;padding:10px 2px}
 .hist{margin:10px 0 0;font-size:13px;color:var(--mute);font-weight:600}
 .pb{background:linear-gradient(135deg,var(--acc),#ff9a3d);color:#fff;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:800;margin-left:6px}
-.note{width:100%;margin-top:8px;padding:9px 11px;border:1px dashed var(--line);border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-size:14px}
+.note{width:100%;margin-top:8px;padding:9px 11px;border:1px dashed var(--line);border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-size:16px}
 .spark{width:120px;height:32px;flex:none}
 .chart{display:block;width:100%;height:auto;margin-top:10px;touch-action:pan-y;cursor:crosshair}
 .chart text{font:600 10px system-ui;fill:var(--mute)}
@@ -164,10 +169,39 @@ nav button{font-size:14px;padding:10px 2px}
   <button id="rest" hidden aria-live="polite"></button>
 </main>
 <script>
-var K='gym-routine-v1';
+var K='gym-routine-v1',saveBad=false;
 var S={start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[]};
-try{var r=JSON.parse(localStorage.getItem(K));if(r&&typeof r==='object'){S=Object.assign(S,r)}}catch(e){}
-function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
+var DK=/^\d{4}-\d\d-\d\d$/,IDK=/^[A-Za-z0-9]{1,20}$/;
+function isNum(x){return typeof x==='number'&&isFinite(x)}
+function isObj(v){return v!=null&&typeof v==='object'&&!Array.isArray(v)}
+function each(o,f){if(isObj(o))Object.keys(o).forEach(function(k){f(k,o[k])})}
+function byDate(a,b){return a[0]<b[0]?-1:a[0]>b[0]?1:0}
+// Rebuild saved data from scratch, keeping only well-formed entries, so a damaged save or backup file can never break the app.
+function cleanState(d){
+ var o={start:null,flip:!!d.flip,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[]};
+ if(typeof d.start==='string'&&DK.test(d.start))o.start=d.start;
+ if(typeof d.first==='string'&&DK.test(d.first))o.first=d.first;
+ if(typeof d.bk==='string'&&DK.test(d.bk))o.bk=d.bk;
+ if(typeof d.style==='string'&&/^[a-z]{1,12}$/.test(d.style))o.style=d.style;
+ each(d.w,function(k,v){if(IDK.test(k)&&isNum(v)&&v>=0)o.w[k]=v});
+ each(d.done,function(k,v){if(DK.test(k)&&isObj(v)){var q={};Object.keys(v).forEach(function(x){if(/^[A-Za-z0-9]{1,20}-\d{1,2}$/.test(x)&&v[x])q[x]=1});o.done[k]=q}});
+ each(d.fin,function(k,v){if(DK.test(k)&&(v==='A'||v==='B'||v===1))o.fin[k]=v});
+ each(d.h,function(k,v){if(IDK.test(k)&&Array.isArray(v)){var a=v.filter(function(e){return Array.isArray(e)&&typeof e[0]==='string'&&DK.test(e[0])&&isNum(e[1])}).map(function(e){return [e[0],e[1]]});if(a.length)o.h[k]=a.sort(byDate)}});
+ each(d.n,function(k,v){if(IDK.test(k)&&typeof v==='string')o.n[k]=v.slice(0,200)});
+ each(d.r,function(k,v){if(IDK.test(k)&&Array.isArray(v)){var a=[];v.forEach(function(e){if(Array.isArray(e)&&typeof e[0]==='string'&&DK.test(e[0])&&Array.isArray(e[1]))a.push([e[0],e[1].slice(0,20).map(function(x){return isNum(x)&&x>=0?x:null})])});if(a.length)o.r[k]=a.sort(byDate)}});
+ each(d.v,function(k,v){if(IDK.test(k)&&typeof v==='string'&&IDK.test(v))o.v[k]=v});
+ each(d.rest,function(k,v){if(IDK.test(k)&&isNum(v)&&v>=10&&v<=600)o.rest[k]=v});
+ if(Array.isArray(d.c))d.c.forEach(function(e){if(isObj(e)&&typeof e.d==='string'&&DK.test(e.d)&&(e.t==='Hike'||e.t==='Gym cardio')&&isNum(e.m)&&isNum(e.k))o.c.push({d:e.d,t:e.t,m:Math.max(0,e.m),k:Math.max(0,e.k)})});
+ if(Array.isArray(d.bw))d.bw.forEach(function(e){if(Array.isArray(e)&&typeof e[0]==='string'&&DK.test(e[0])&&isNum(e[1])&&e[1]>=20&&e[1]<=400)o.bw.push([e[0],e[1]])});
+ o.bw.sort(byDate);
+ return o;
+}
+try{var r=JSON.parse(localStorage.getItem(K));if(isObj(r)){S=cleanState(r)}}catch(e){}
+// If the phone refuses to store data, say so instead of silently losing it.
+function warn(on){var w=document.getElementById('warn');
+ if(on&&!w){w=document.createElement('div');w.id='warn';w.setAttribute('role','alert');w.textContent='Your phone is not letting this app save. Anything you log will be lost when you close it. Try leaving private browsing, then export a backup.';var n=document.querySelector('nav');if(n)n.before(w)}
+ else if(!on&&w)w.remove()}
+function save(){try{localStorage.setItem(K,JSON.stringify(S));if(saveBad){saveBad=false;warn(false)}}catch(e){saveBad=true;warn(true)}}
 
 var W={
  A:{title:'Workout A',items:[['leg','Leg press',3,'8-12'],['chest','Chest press machine',3,'8-12'],['row','Seated cable row',3,'8-12'],['shp','Shoulder press machine',2,'8-12'],['curl','Leg curl',2,'10-15'],['core','Cable crunch or plank',2,'10-15']]},
@@ -181,6 +215,15 @@ function dkey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDat
 function monday(d){var m=new Date(d.getFullYear(),d.getMonth(),d.getDate());m.setDate(m.getDate()-((m.getDay()+6)%7));return m}
 var now=new Date();
 if(!S.start){S.start=dkey(monday(now));save()}
+// The first day the app was used: days before it are never counted as missed.
+function ensureFirst(){
+ if(S.first&&DK.test(S.first))return;
+ var ds=[];Object.keys(S.done).forEach(function(k){ds.push(k)});Object.keys(S.fin).forEach(function(k){ds.push(k)});
+ Object.keys(S.h).forEach(function(i){S.h[i].forEach(function(e){ds.push(e[0])})});Object.keys(S.r).forEach(function(i){S.r[i].forEach(function(e){ds.push(e[0])})});
+ S.c.forEach(function(e){ds.push(e.d)});S.bw.forEach(function(e){ds.push(e[0])});
+ ds.sort();S.first=ds.length?ds[0]:dkey(now);save();
+}
+ensureFirst();
 function weekIdx(d){var a=monday(d||now),p=S.start.split('-'),b=new Date(+p[0],+p[1]-1,+p[2]);return Math.round((a-b)/(7*864e5))}
 function swapped(d){return (weekIdx(d)%2!==0)!==S.flip}
 function sessionFor(dow,d){
@@ -196,8 +239,8 @@ function finOn(d){var f=S.fin[dkey(d)];return f===1?sessionFor(d.getDay(),d):f||
 function weekState(){
  var m=monday(now),t=dkey(now),days=[],spare=[];
  for(var i=0;i<7;i++){var d=new Date(m.getFullYear(),m.getMonth(),m.getDate()+i),p=sessionFor(d.getDay(),d),f=finOn(d);
-  days.push({d:d,k:dkey(d),dow:d.getDay(),plan:p,done:f,past:dkey(d)<t});if(f&&f!==p)spare.push(f)}
- days.forEach(function(x){if(x.plan&&x.done!==x.plan&&x.past){var j=spare.indexOf(x.plan);if(j>=0){spare.splice(j,1);x.madeUp=1}else x.missed=1}});
+  days.push({d:d,k:dkey(d),dow:d.getDay(),plan:p,done:f,past:dkey(d)<t,pre:dkey(d)<S.first});if(f&&f!==p)spare.push(f)}
+ days.forEach(function(x){if(x.plan&&!x.pre&&x.done!==x.plan&&x.past){var j=spare.indexOf(x.plan);if(j>=0){spare.splice(j,1);x.madeUp=1}else x.missed=1}});
  return days;
 }
 function owed(){return weekState().filter(function(x){return x.missed})}
@@ -337,6 +380,26 @@ function items(key,dow){
 
 // A session counts once every lifting set is ticked; the warm-up and cooldown cardio are optional.
 // Backfill days from before that rule where the lifts were all done but the cooldown tick was missed.
+function logWeight(id){
+ var v=S.w[id];if(!(v>0))return;
+ var h=S.h[id]=S.h[id]||[],t=dkey(now);if(h.length&&h[h.length-1][0]===t)return;
+ h.push([t,v]);if(h.length>400)h.shift();
+}
+// Earlier sessions at an unchanged weight never reached the history. A weight only changes through an entry, so
+// the weight used on a day with logged reps is the latest entry before it.
+function backfillHist(){
+ var ch=false;
+ Object.keys(S.r).forEach(function(id){
+  var h=S.h[id];if(!h||!h.length)return;
+  S.r[id].forEach(function(e){
+   if(h.some(function(x){return x[0]===e[0]}))return;
+   var prev=null;h.forEach(function(x){if(x[0]<e[0]&&(!prev||x[0]>=prev[0]))prev=x});
+   if(prev){h.push([e[0],prev[1]]);ch=true}
+  });
+  h.sort(byDate);
+ });
+ if(ch)save();
+}
 function backfillFin(){
  var ch=false;
  Object.keys(S.done||{}).forEach(function(dk){
@@ -351,6 +414,14 @@ function backfillFin(){
  if(ch)save();
 }
 function render(){
+ try{renderMain()}catch(e){
+  var a=document.getElementById('app');
+  if(a)a.innerHTML='<div class="msg"><b>Something went wrong</b>The app could not show your saved data. It has not been deleted. Save a copy first, then delete everything only if you have to.<div class="cbtns"><button class="ghost" data-act="rawexport">Save a copy of my data</button><button class="ghost danger" data-act="wipe">Delete all my data</button></div></div>';
+  try{console.error(e)}catch(x){}
+ }
+ syncWake();
+}
+function renderMain(){
  var dow=now.getDay(),today=sessionFor(dow);shownDay=dkey(now);
  document.getElementById('h').textContent=DAYS[dow];
  document.querySelectorAll('nav button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.tab===tab?'true':'false')});
@@ -425,14 +496,16 @@ function workoutHtml(dow,today){
 
 function weekHtml(){
  var ws=weekState(),pl=0,dn=0;
- var h=ws.map(function(x){var st='';if(x.plan)pl++;if(x.done)dn++;
+ var h=ws.map(function(x){var st='';if(x.plan&&!x.pre)pl++;if(x.done)dn++;
   if(x.done)st=' <span class="ok">&#10003; '+(x.done!==x.plan?'did Workout '+x.done:'done')+'</span>';
   else if(x.madeUp)st=' <span class="ok">made up</span>';
   else if(x.missed)st=' <span class="miss">missed</span>';
   return '<div class="day'+(x.k===dkey(now)?' now':'')+'"><span>'+DAYS[x.dow]+'</span><span>'+plan(x.dow)+(x.plan&&!x.done&&!x.past?', 9am':'')+st+'</span></div>'}).join('');
- return '<p class="small"><b>'+dn+' of '+pl+' sessions done this week.</b> Missed one? Do it on a rest day and it counts; anything still missed is dropped when the new week starts.</p><p class="small">Week '+(weekIdx()%2===0?'1':'2')+' order shown. It flips every week (A, B, A then B, A, B).</p>'+h+'<button class="ghost" data-act="flip">Flip A and B order</button><button class="ghost" data-act="wipe">Clear all saved data</button>'+
+ return '<p class="small"><b>'+dn+' of '+pl+' sessions done this week.</b> Missed one? Do it on a rest day and it counts; anything still missed is dropped when the new week starts.</p><p class="small">Week '+(weekIdx()%2===0?'1':'2')+' order shown. It flips every week (A, B, A then B, A, B).</p>'+h+'<button class="ghost" data-act="flip">Flip A and B order</button>'+
  '<h2>Backup</h2><p class="small">Everything is saved only on this device. Export a backup now and then so you can restore it if you clear your browser or change phone. Last backup: '+(S.bk?S.bk.split('-').reverse().join('/'):'never')+'.</p>'+
- '<button class="ghost" data-act="export">Export backup</button><button class="ghost" data-act="import">Import backup</button><input type="file" id="imp" accept="application/json,.json" hidden>';
+ '<button class="ghost" data-act="export">Export backup</button><button class="ghost" data-act="import">Import backup</button><input type="file" id="imp" accept="application/json,.json" hidden>'+
+ '<p class="small">Adding this to your iPhone Home Screen? The installed app keeps its own data, separate from Safari. Export a backup here first, then open the installed app and import it.</p>'+
+ '<h2>Danger zone</h2><p class="small">Deletes every weight, rep, note, bodyweight entry and cardio log on this device.</p><button class="ghost danger" data-act="wipe">Delete all my data</button>';
 }
 
 function ddmm(d){return d.slice(8)+'/'+d.slice(5,7)}
@@ -484,7 +557,7 @@ function progressHtml(){
  S.c.forEach(function(e){if(e.d>=mon)wk+=e.m;if(e.t==='Hike'&&e.k>lh)lh=e.k});
  h+='<h2>Cardio and hikes</h2><div class="ex"><div class="top"><b>This week: '+wk+' min</b><span class="meta">Longest hike '+lh+' km</span></div><div class="form"><select id="ct" aria-label="Type"><option>Hike</option><option>Gym cardio</option></select><input id="cm" type="number" inputmode="decimal" min="0" placeholder="min" aria-label="Minutes"><input id="ck" type="number" inputmode="decimal" min="0" step="0.1" placeholder="km" aria-label="Distance in km"></div><div class="form"><input id="cd" type="date" value="'+dkey(now)+'" max="'+dkey(now)+'" aria-label="Date"><button class="chip" data-act="addc">Add</button></div></div>';
  var rows=S.c.map(function(e,i){return [e,i]}).sort(function(a,b){return a[0].d<b[0].d?1:a[0].d>b[0].d?-1:b[1]-a[1]}).slice(0,8);
- rows.forEach(function(x){var e=x[0];h+='<div class="day"><span>'+e.t+' &middot; '+e.d.slice(5).split('-').reverse().join('/')+'</span><span>'+(e.m?e.m+' min':'')+(e.m&&e.k?', ':'')+(e.k?e.k+' km':'')+' <button class="ghost" data-del="'+x[1]+'" aria-label="Delete entry" style="margin:0 0 0 6px;padding:4px 9px">x</button></span></div>'});
+ rows.forEach(function(x){var e=x[0];h+='<div class="day"><span>'+esc(e.t)+' &middot; '+e.d.slice(5).split('-').reverse().join('/')+'</span><span>'+(e.m?e.m+' min':'')+(e.m&&e.k?', ':'')+(e.k?e.k+' km':'')+' <button class="ghost" data-del="'+x[1]+'" aria-label="Delete entry" style="margin:0 0 0 6px;padding:4px 9px">x</button></span></div>'});
  return h;
 }
 function proteinFor(kg){function r5(v){return Math.round(v/5)*5}return r5(kg*1.6)+'-'+r5(kg*2.2)+' g'}
@@ -512,16 +585,26 @@ document.addEventListener('click',function(e){
  if(t.dataset.var){var vp=t.dataset.var.split(':');S.v[vp[0]]=vp[1];save();render();return}
  if(t.dataset.k){var dk=dkey(now);S.done[dk]=S.done[dk]||{};if(S.done[dk][t.dataset.k])delete S.done[dk][t.dataset.k];else S.done[dk][t.dataset.k]=1;
   var ks=Object.keys(S.done);if(ks.length>60){ks.sort();ks.slice(0,ks.length-60).forEach(function(k){delete S.done[k]})}
-  var on=S.done[dk][t.dataset.k],sl=t.dataset.k.slice(0,t.dataset.k.lastIndexOf('-')),va=variant(sl);save();render();if(on&&!/^(warm|cardio)$/.test(sl))startRest(restFor(va?va[0]:sl));return}
+  var on=S.done[dk][t.dataset.k],sl=t.dataset.k.slice(0,t.dataset.k.lastIndexOf('-')),va=variant(sl),lift=!/^(warm|cardio)$/.test(sl);
+  if(on&&lift)logWeight(va?va[0]:sl);
+  // Unticking a lifting set of a finished workout makes it unfinished again.
+  var fw=S.fin[dk];if(!on&&lift&&W[fw]&&W[fw].items.some(function(x){return x[0]===sl}))delete S.fin[dk];
+  save();render();if(on&&lift)startRest(restFor(va?va[0]:sl));return}
  if(t.dataset.act==='addc'){var m=parseFloat(document.getElementById('cm').value),k=parseFloat(document.getElementById('ck').value);if(!(m>0)&&!(k>0))return;var cd=document.getElementById('cd').value;if(!/^\d{4}-\d\d-\d\d$/.test(cd)||cd>dkey(now))cd=dkey(now);S.c.push({d:cd,t:document.getElementById('ct').value,m:m>0?m:0,k:k>0?k:0});if(S.c.length>400)S.c.shift();save();render();return}
  if(t.dataset.act==='bw'){var bw=parseFloat(document.getElementById('bwi').value),td=dkey(now);if(!(bw>=20&&bw<=400))return;bw=Math.round(bw*10)/10;
   if(S.bw.length&&S.bw[S.bw.length-1][0]===td)S.bw[S.bw.length-1][1]=bw;else S.bw.push([td,bw]);if(S.bw.length>400)S.bw.shift();save();render();return}
  if(t.dataset.del!=null){S.c.splice(+t.dataset.del,1);save();render();return}
- if(t.dataset.act==='reset'){var td=dkey(now);delete S.done[td];Object.keys(S.r).forEach(function(id){S.r[id]=S.r[id].filter(function(e){return e[0]!==td})});save();render()}
+ if(t.dataset.act==='reset'){var td=dkey(now);delete S.done[td];delete S.fin[td];
+  Object.keys(S.r).forEach(function(id){S.r[id]=S.r[id].filter(function(e){return e[0]!==td})});
+  Object.keys(S.h).forEach(function(id){S.h[id]=S.h[id].filter(function(e){return e[0]!==td});if(!S.h[id].length)delete S.h[id]});
+  save();render()}
  if(t.dataset.act==='flip'){S.flip=!S.flip;save();render()}
  if(t.dataset.act==='export'){exportData();return}
  if(t.dataset.act==='import'){document.getElementById('imp').click();return}
- if(t.dataset.act==='wipe'){if(confirm('Clear all saved weights and ticks?')){S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[],style:S.style};save();render()}}
+ if(t.dataset.act==='rawexport'){try{saveFile('gym-raw-data.json',localStorage.getItem(K)||'{}')}catch(e){}return}
+ if(t.dataset.act==='wipe'){var nf=Object.keys(S.fin).length;
+  if(confirm('Delete ALL your data on this device? That is every weight, rep, note, bodyweight entry and cardio log ('+nf+' finished session'+(nf===1?'':'s')+'). '+(S.bk?'Your last backup was '+S.bk.split('-').reverse().join('/')+'. ':'You have never exported a backup. ')+'This cannot be undone.')){
+   S={start:dkey(monday(now)),flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[],style:S.style,first:dkey(now)};save();render()}}
 });
 function patchHist(i,id){var ex=i.closest('.ex'),w=ex&&ex.querySelector('.hw');if(w)w.innerHTML=histHtml(id,ex.querySelectorAll('.rp').length)}
 document.addEventListener('change',function(e){
@@ -533,7 +616,7 @@ document.addEventListener('change',function(e){
   var R=S.r[id]=S.r[id]||[],e=R.length&&R[R.length-1][0]===t?R[R.length-1]:null;
   if(!e){if(v==null)return;e=[t,[]];R.push(e);if(R.length>400)R.shift()}
   for(var j=0;j<Math.max(n,e[1].length);j++)if(e[1][j]===undefined)e[1][j]=null;
-  e[1][si]=v;if(e[1].every(function(x){return x==null}))R.pop();
+  e[1][si]=v;if(e[1].every(function(x){return x==null}))R.pop();else if(v!=null)logWeight(id);
   // Typing reps for a set means it is done: tick it and start the rest timer.
   var tk=i.dataset.t||k,D=S.done[t]=S.done[t]||{},fresh=v!=null&&!D[tk];if(fresh)D[tk]=1;
   save();syncTicks();patchHist(i,id);if(fresh)startRest(restFor(id))}
@@ -541,31 +624,47 @@ document.addEventListener('change',function(e){
 });
 // Rest timer counts against an end time, so a locked or backgrounded phone cannot make it drift.
 // The beep is scheduled on the audio clock up front, so it fires on time even if the interval is throttled.
-function exportData(){
- S.bk=dkey(new Date());save();
- var name='gym-backup-'+S.bk+'.json',blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+function saveFile(name,text){
+ var blob=new Blob([text],{type:'application/json'});
  // iOS home-screen apps cannot download files, so hand the file to the share sheet on touch devices.
  try{var f=new File([blob],name,{type:'application/json'});
-  if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:name}).catch(function(){});render();return}}catch(e){}
+  if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:name}).catch(function(){});return}}catch(e){}
  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
- setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);render();
+ setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);
 }
-function isObj(v){return v!=null&&typeof v==='object'&&!Array.isArray(v)}
+function exportData(){
+ S.bk=dkey(new Date());save();
+ saveFile('gym-backup-'+S.bk+'.json',JSON.stringify(S,null,1));render();
+}
 function importData(file){
  var rd=new FileReader();
  rd.onload=function(){
   var d;try{d=JSON.parse(rd.result)}catch(e){d=null}
-  if(!isObj(d)||typeof d.start!=='string'||!/^\d{4}-\d\d-\d\d$/.test(d.start)||!['w','done','fin','h','n','r','v','rest'].every(function(k){return d[k]==null||isObj(d[k])})||['c','bw'].some(function(k){return d[k]!=null&&!Array.isArray(d[k])})){alert('That file is not a Gym Routine backup.');return}
-  var nf=Object.keys(d.fin||{}).length;
+  if(!isObj(d)||typeof d.start!=='string'||!DK.test(d.start)){alert('That file is not a Gym Routine backup.');return}
+  var c=cleanState(d),nf=Object.keys(c.fin).length;
   if(!confirm('Replace everything on this device with this backup ('+nf+' session'+(nf===1?'':'s')+' finished)?'))return;
-  S=Object.assign({start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[]},d);S.flip=!!S.flip;
-  backfillFin();save();applyStyle();render();
+  S=c;ensureFirst();backfillHist();backfillFin();save();applyStyle();render();
  };
  rd.readAsText(file);
 }
-var rt=null,rl=0,rEnd=0,actx=null,beeps=[];
-function showRest(){var p=document.getElementById('rest');if(rl<=0){p.hidden=true;return}p.hidden=false;p.textContent='Rest '+Math.floor(rl/60)+':'+pad(rl%60)+' \u00b7 tap to skip'}
-function tickRest(){rl=Math.max(0,Math.ceil((rEnd-Date.now())/1000));if(rl<=0){clearInterval(rt);try{navigator.vibrate&&navigator.vibrate(250)}catch(e){}}showRest()}
+var rt=null,rl=0,rEnd=0,actx=null,beeps=[],goUntil=0,wl=null,wlBusy=false;
+// iPhones cannot vibrate from a web page, so when rest ends the button also turns green and pulses where you can see it.
+function showRest(){var p=document.getElementById('rest');
+ if(rl>0){p.hidden=false;p.className='';p.textContent='Rest '+Math.floor(rl/60)+':'+pad(rl%60)+' \u00b7 tap to skip';return}
+ if(Date.now()<goUntil){p.hidden=false;p.className='go';p.textContent='Rest over, next set. Tap to dismiss';return}
+ p.hidden=true;p.className=''}
+function tickRest(){rl=Math.max(0,Math.ceil((rEnd-Date.now())/1000));
+ if(rl<=0&&rEnd){clearInterval(rt);rEnd=0;goUntil=Date.now()+8000;setTimeout(showRest,8100);try{navigator.vibrate&&navigator.vibrate(250)}catch(e){}}showRest()}
+// Keep the screen on while a workout is under way, so the timer and its beep keep running between sets.
+function wantWake(){var k=dkey(now),D=S.done[k];return !!(D&&Object.keys(D).length)&&!S.fin[k]}
+function syncWake(){
+ try{if(!('wakeLock' in navigator))return;
+  if(wantWake()){if(!wl&&!wlBusy){wlBusy=true;navigator.wakeLock.request('screen').then(function(l){wlBusy=false;wl=l;l.addEventListener('release',function(){wl=null})}).catch(function(){wlBusy=false})}}
+  else if(wl){wl.release();wl=null}}catch(e){wlBusy=false}
+}
+// iOS only lets audio start from a real tap, so unlock it on the first touch of the page.
+function unlockAudio(){try{var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;actx=actx||new AC();if(actx.state==='suspended')actx.resume()}catch(e){}}
+document.addEventListener('pointerdown',unlockAudio);document.addEventListener('touchend',unlockAudio);
 function stopBeeps(){beeps.forEach(function(o){try{o.stop()}catch(e){}});beeps=[]}
 function schedBeeps(sec){
  try{var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;actx=actx||new AC();if(actx.state==='suspended')actx.resume();
@@ -573,14 +672,14 @@ function schedBeeps(sec){
    g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.25,t0+.01);g.gain.linearRampToValueAtTime(0,t0+.18);
    o.connect(g);g.connect(actx.destination);o.start(t0);o.stop(t0+.2);beeps.push(o)})}catch(e){}
 }
-function startRest(sec){sec=sec||90;clearInterval(rt);stopBeeps();rEnd=Date.now()+sec*1e3;schedBeeps(sec);tickRest();rt=setInterval(tickRest,1000)}
-document.getElementById('rest').addEventListener('click',function(){clearInterval(rt);stopBeeps();rEnd=0;rl=0;showRest()});
+function startRest(sec){sec=sec||90;clearInterval(rt);stopBeeps();goUntil=0;rEnd=Date.now()+sec*1e3;schedBeeps(sec);tickRest();rt=setInterval(tickRest,1000);syncWake()}
+document.getElementById('rest').addEventListener('click',function(){clearInterval(rt);stopBeeps();rEnd=0;rl=0;goUntil=0;showRest()});
 var STY=[['ember','Ember'],['concrete','Concrete'],['paper','Paper'],['neon','Neon']];
 function applyStyle(){var s=S.style||'ember',d=document.documentElement;if(s==='ember')d.removeAttribute('data-style');else d.setAttribute('data-style',s);
  document.getElementById('st').innerHTML=STY.map(function(x){return '<button class="sp" data-style="'+x[0]+'" aria-pressed="'+(x[0]===s)+'">'+x[1]+'</button>'}).join('')}
-backfillFin();applyStyle();render();
+backfillHist();backfillFin();applyStyle();render();
 // An installed app can stay in memory for days, so move to the new day when it comes back or midnight passes.
-function refreshDay(){now=new Date();if(rEnd)tickRest();
+function refreshDay(){now=new Date();if(rEnd)tickRest();syncWake();
  if(dkey(now)!==shownDay&&!(document.activeElement&&document.activeElement.tagName==='INPUT')){view='today';render()}}
 document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshDay()});
 window.addEventListener('pageshow',refreshDay);
