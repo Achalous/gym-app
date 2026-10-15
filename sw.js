@@ -1,6 +1,6 @@
 // Serve the saved copy straight away when the network is slow, so a weak gym signal never blocks the app.
 // With no saved copy yet (first visit) it waits for the network. Updates still arrive in the background.
-const CACHE = 'gym-routine-v2';
+const CACHE = 'gym-routine-v3';
 const CORE = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 const WAIT_MS = 2500;
 self.addEventListener('install', e => {
