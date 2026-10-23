@@ -56,6 +56,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .rp{width:48px;padding:6px 2px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;font-weight:700;text-align:center;-moz-appearance:textfield}
 .rp::-webkit-inner-spin-button,.rp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .hist.up{color:var(--done)}
+.rchip{display:block;width:100%;margin:-8px 0 16px;flex:none;font-size:13px}
+.rnote{border-left:3px solid var(--acc);padding-left:10px}
 .msg.catch{border:2px solid var(--acc)}.cbtns{display:flex;gap:6px;margin-top:12px}
 .vars{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .vb{border:1px solid var(--line);background:transparent;color:var(--mute);padding:6px 11px;border-radius:99px;font:600 13px system-ui;cursor:pointer}
@@ -199,7 +201,8 @@ nav button{font-size:14px;padding:10px 2px}
 <script>
 var K='gym-routine-v1',saveBad=false;
 var S={start:null,flip:false,w:{},done:{},fin:{},h:{},n:{},c:[],r:{},v:{},rest:{},bw:[],kg:{},ty:{},e:{},xs:{},rt:null,cx:{},goal:60};
-var DK=/^\d{4}-\d\d-\d\d$/,IDK=/^[A-Za-z0-9]{1,20}$/,RANGE=/^\d{1,3}(-\d{1,3})?$/,GROUPS=['Chest','Back','Shoulders','Arms','Legs','Core'];
+// The workouts: A and B alternate on the schedule; R is the recovery day, done whenever chest or shoulders need a break.
+var WKS=['A','B','R'],DK=/^\d{4}-\d\d-\d\d$/,IDK=/^[A-Za-z0-9]{1,20}$/,RANGE=/^\d{1,3}(-\d{1,3})?$/,GROUPS=['Chest','Back','Shoulders','Arms','Legs','Core'];
 function isNum(x){return typeof x==='number'&&isFinite(x)}
 function isObj(v){return v!=null&&typeof v==='object'&&!Array.isArray(v)}
 function each(o,f){if(isObj(o))Object.keys(o).forEach(function(k){f(k,o[k])})}
@@ -215,7 +218,7 @@ function cleanState(d){
  if(typeof d.style==='string'&&/^[a-z]{1,12}$/.test(d.style))o.style=d.style;
  each(d.w,function(k,v){if(IDK.test(k)&&isNum(v)&&v>=0)o.w[k]=v});
  each(d.done,function(k,v){if(DK.test(k)&&isObj(v)){var q={};Object.keys(v).forEach(function(x){if(/^[A-Za-z0-9]{1,20}-\d{1,2}$/.test(x)&&v[x])q[x]=1});o.done[k]=q}});
- each(d.fin,function(k,v){if(DK.test(k)&&(v==='A'||v==='B'||v===1))o.fin[k]=v});
+ each(d.fin,function(k,v){if(DK.test(k)&&(v==='A'||v==='B'||v==='R'||v===1))o.fin[k]=v});
  each(d.h,function(k,v){if(IDK.test(k)&&Array.isArray(v)){var a=v.filter(function(e){return Array.isArray(e)&&typeof e[0]==='string'&&DK.test(e[0])&&isNum(e[1])}).map(function(e){return [e[0],e[1]]});if(a.length)o.h[k]=a.sort(byDate)}});
  each(d.n,function(k,v){if(IDK.test(k)&&typeof v==='string')o.n[k]=v.slice(0,200)});
  each(d.r,function(k,v){if(IDK.test(k)){var a=cleanSets(v,function(x){return isNum(x)&&x>=0?x:null});if(a.length)o.r[k]=a}});
@@ -224,7 +227,7 @@ function cleanState(d){
  each(d.e,function(k,v){if(IDK.test(k)&&Array.isArray(v)){var a=v.filter(function(e){return Array.isArray(e)&&typeof e[0]==='string'&&DK.test(e[0])&&isNum(e[1])&&e[1]>=1&&e[1]<=10}).map(function(e){return [e[0],e[1]]});if(a.length)o.e[k]=a.sort(byDate)}});
  each(d.xs,function(k,v){if(DK.test(k)&&isObj(v)){var q={},any=false;each(v,function(s,n){if(IDK.test(s)&&isNum(n)&&n>=1&&n<=6){q[s]=Math.floor(n);any=true}});if(any)o.xs[k]=q}});
  each(d.cx,function(k,v){if(IDK.test(k)&&isObj(v)&&typeof v.n==='string'&&v.n.trim()&&GROUPS.indexOf(v.g)>=0){o.cx[k]={n:v.n.trim().slice(0,40),g:v.g};if(v.u==='sec')o.cx[k].u='sec'}});
- if(isObj(d.rt)){var rt={};['A','B'].forEach(function(k){if(Array.isArray(d.rt[k])){var rows=[];d.rt[k].forEach(function(x){if(Array.isArray(x)&&typeof x[0]==='string'&&IDK.test(x[0])&&isNum(x[1])&&x[1]>=1&&x[1]<=8&&typeof x[2]==='string'&&RANGE.test(x[2]))rows.push([x[0],Math.floor(x[1]),x[2]])});rt[k]=rows.slice(0,12)}});if(rt.A&&rt.A.length&&rt.B&&rt.B.length)o.rt=rt}
+ if(isObj(d.rt)){var rt={};WKS.forEach(function(k){if(Array.isArray(d.rt[k])){var rows=[];d.rt[k].forEach(function(x){if(Array.isArray(x)&&typeof x[0]==='string'&&IDK.test(x[0])&&isNum(x[1])&&x[1]>=1&&x[1]<=8&&typeof x[2]==='string'&&RANGE.test(x[2]))rows.push([x[0],Math.floor(x[1]),x[2]])});rt[k]=rows.slice(0,12)}});if(rt.R&&!rt.R.length)delete rt.R;if(rt.A&&rt.A.length&&rt.B&&rt.B.length)o.rt=rt}
  if(isNum(d.goal)&&d.goal>=0&&d.goal<=2000)o.goal=Math.round(d.goal);
  if(Array.isArray(d.c))d.c.forEach(function(e){if(isObj(e)&&typeof e.d==='string'&&DK.test(e.d)&&(e.t==='Hike'||e.t==='Gym cardio')&&isNum(e.m)&&isNum(e.k)){var q={d:e.d,t:e.t,m:Math.max(0,e.m),k:Math.max(0,e.k)};if(e.g===1)q.g=1;o.c.push(q)}});
  if(Array.isArray(d.bw))d.bw.forEach(function(e){if(Array.isArray(e)&&typeof e[0]==='string'&&DK.test(e[0])&&isNum(e[1])&&e[1]>=20&&e[1]<=400)o.bw.push([e[0],e[1]])});
@@ -241,7 +244,9 @@ function save(){try{localStorage.setItem(K,JSON.stringify(S));if(saveBad){saveBa
 // The routine as shipped. Each row is [exercise id, sets, rep range]. It can be changed in the app (saved in S.rt).
 var DEF={
  A:[['leg',3,'8-12'],['chest',3,'8-12'],['row',3,'8-12'],['shp',2,'8-12'],['curl',2,'10-15'],['core',2,'10-15']],
- B:[['squat',3,'8-12'],['lat',3,'8-12'],['inc',3,'8-12'],['hip',2,'10-12'],['lat2',2,'12-15'],['arms',2,'10-15'],['tri',2,'10-15']]
+ B:[['squat',3,'8-12'],['lat',3,'8-12'],['inc',3,'8-12'],['hip',2,'10-12'],['lat2',2,'12-15'],['arms',2,'10-15'],['tri',2,'10-15']],
+ // Recovery day: no pressing, nothing overhead and nothing resting on the shoulders (so leg press, not hack squat).
+ R:[['leg',3,'8-12'],['curl',3,'10-15'],['legext',2,'12-15'],['hip',3,'10-12'],['calf',3,'12-15'],['deadbug',2,'8-12']]
 };
 var BASE={leg:['Leg press','Legs'],chest:['Chest press machine','Chest'],row:['Seated cable row','Back'],shp:['Shoulder press machine','Shoulders'],curl:['Leg curl','Legs'],core:['Cable crunch or plank','Core'],squat:['Hack squat or goblet squat','Legs'],lat:['Lat pulldown','Back'],inc:['Incline chest press','Chest'],hip:['Hip thrust or back extension','Legs'],lat2:['Lateral raise','Shoulders'],arms:['Bicep curl','Arms'],tri:['Tricep pushdown','Arms']};
 // Extra exercises to add or swap in: [id, name, sets, reps, muscle group, unit]
@@ -251,9 +256,9 @@ var LIB=[
  ['dbshp','Dumbbell shoulder press',3,'8-12','Shoulders'],['reardelt','Rear delt fly',2,'12-15','Shoulders'],['cablelat','Cable lateral raise',2,'12-15','Shoulders'],
  ['hammer','Hammer curl',2,'10-15','Arms'],['preacher','Preacher curl',2,'10-15','Arms'],['skull','Skull crusher',2,'10-15','Arms'],['ohtri','Overhead tricep extension',2,'10-15','Arms'],['assistdip','Assisted dips',3,'6-10','Arms'],
  ['legext','Leg extension',3,'10-15','Legs'],['lunge','Walking lunge',2,'10-12','Legs'],['calf','Calf raise',3,'12-15','Legs'],['abduct','Hip abduction machine',2,'12-15','Legs'],
- ['legraise','Leg raise',2,'10-15','Core'],['abmach','Ab crunch machine',2,'10-15','Core'],['sideplank','Side plank',2,'20-40','Core','sec']
+ ['legraise','Leg raise',2,'10-15','Core'],['deadbug','Dead bug (each side)',2,'8-12','Core'],['abmach','Ab crunch machine',2,'10-15','Core'],['sideplank','Side plank',2,'20-40','Core','sec']
 ];
-var W={A:{title:'Workout A',items:[]},B:{title:'Workout B',items:[]}},EXC={},NAMES={},TOP={},UNIT={},GRP={};
+var W={A:{title:'Workout A',items:[]},B:{title:'Workout B',items:[]},R:{title:'Recovery day',items:[]}},EXC={},NAMES={},TOP={},UNIT={},GRP={};
 function topOf(r){var p=String(r).split('-'),v=parseInt(p[p.length-1],10);return v>0?v:0}
 // Slots that offer a choice of lift: [id, name, rep range, unit]. Each variant keeps its own weight, reps,
 // history and settings note. The first variant reuses the slot id, so history logged before variants lands there.
@@ -269,14 +274,14 @@ function rebuild(){
  EXC.goblet={n:'Goblet squat',g:'Legs'};EXC.backext={n:'Back extension',g:'Legs'};EXC.plank={n:'Plank',g:'Core',u:'sec'};
  LIB.forEach(function(x){EXC[x[0]]={n:x[1],g:x[4],u:x[5],r:x[3],s:x[2],alt:1}});
  each(S.cx,function(id,c){EXC[id]={n:c.n,g:c.g,u:c.u,r:c.u==='sec'?'20-40':'8-12',s:3,alt:1,cx:1}});
- if(S.rt){['A','B'].forEach(function(k){S.rt[k]=S.rt[k].filter(function(x){return EXC[x[0]]})});if(!S.rt.A.length||!S.rt.B.length)S.rt=null}
- ['A','B'].forEach(function(k){
+ if(S.rt){WKS.forEach(function(k){if(S.rt[k])S.rt[k]=S.rt[k].filter(function(x){return EXC[x[0]]})});if(S.rt.R&&!S.rt.R.length)delete S.rt.R;if(!S.rt.A||!S.rt.A.length||!S.rt.B||!S.rt.B.length)S.rt=null}
+ WKS.forEach(function(k){
   var rows=(S.rt&&S.rt[k])||DEF[k];
   W[k].items=rows.filter(function(x){return EXC[x[0]]}).map(function(x){return [x[0],EXC[x[0]].n,x[1],x[2]]});
  });
  NAMES={};TOP={};UNIT={};GRP={};
  Object.keys(EXC).forEach(function(id){var c=EXC[id];NAMES[id]=c.n;GRP[id]=c.g;if(c.u)UNIT[id]=c.u;TOP[id]=c.r?topOf(c.r):0});
- ['A','B'].forEach(function(k){W[k].items.forEach(function(x){NAMES[x[0]]=x[1];TOP[x[0]]=topOf(x[3])})});
+ WKS.forEach(function(k){W[k].items.forEach(function(x){NAMES[x[0]]=x[1];TOP[x[0]]=topOf(x[3])})});
  Object.keys(VAR).forEach(function(sl){VAR[sl].forEach(function(v){NAMES[v[0]]=v[1];TOP[v[0]]=v[2]?topOf(v[2]):TOP[sl];if(v[3])UNIT[v[0]]=v[3];if(!GRP[v[0]])GRP[v[0]]=GRP[sl]})});
 }
 function routineHas(id){return W.A.items.some(function(x){return x[0]===id})||W.B.items.some(function(x){return x[0]===id})}
@@ -326,8 +331,8 @@ function finOn(d){var f=S.fin[dkey(d)];return f===1?sessionFor(d.getDay(),d):f||
 function weekState(){
  var m=monday(now),t=dkey(now),days=[],spare=[];
  for(var i=0;i<7;i++){var d=new Date(m.getFullYear(),m.getMonth(),m.getDate()+i),p=sessionFor(d.getDay(),d),f=finOn(d);
-  days.push({d:d,k:dkey(d),dow:d.getDay(),plan:p,done:f,past:dkey(d)<t,pre:dkey(d)<S.first});if(f&&f!==p)spare.push(f)}
- days.forEach(function(x){if(x.plan&&!x.pre&&x.done!==x.plan&&x.past){var j=spare.indexOf(x.plan);if(j>=0){spare.splice(j,1);x.madeUp=1}else x.missed=1}});
+  days.push({d:d,k:dkey(d),dow:d.getDay(),plan:p,done:f,past:dkey(d)<t,pre:dkey(d)<S.first});if(f&&f!==p&&f!=='R')spare.push(f)}
+ days.forEach(function(x){if(x.done==='R'&&x.plan)x.rec=1;if(x.plan&&!x.pre&&x.done!==x.plan&&!x.rec&&x.past){var j=spare.indexOf(x.plan);if(j>=0){spare.splice(j,1);x.madeUp=1}else x.missed=1}});
  return days;
 }
 function owed(){return weekState().filter(function(x){return x.missed})}
@@ -652,14 +657,14 @@ function hikeCard(){
  return '<h2>Log your hike</h2><div class="ex"><div class="top"><b>Saturday hike</b><span class="meta">'+td.length+' logged today</span></div>'+td.map(function(e){return '<p class="hist up">'+cardioTxt(e)+'</p>'}).join('')+cardioForm('Hike')+'</div>';
 }
 function editBar(d,dow,key){
- return '<div class="msg catch"><b>Editing '+DAYS[dow]+' '+ddmm(d)+'</b>Changes are saved to that day, not today.<div class="cbtns"><button class="chip" data-ek="A" aria-pressed="'+(key==='A')+'">Workout A</button><button class="chip" data-ek="B" aria-pressed="'+(key==='B')+'">Workout B</button><button class="chip" data-act="exitedit">Done</button></div></div>';
+ return '<div class="msg catch"><b>Editing '+DAYS[dow]+' '+ddmm(d)+'</b>Changes are saved to that day, not today.<div class="cbtns"><button class="chip" data-ek="A" aria-pressed="'+(key==='A')+'">Workout A</button><button class="chip" data-ek="B" aria-pressed="'+(key==='B')+'">Workout B</button><button class="chip" data-ek="R" aria-pressed="'+(key==='R')+'">Recovery</button><button class="chip" data-act="exitedit">Done</button></div></div>';
 }
 var TYN={W:'Warm',D:'Drop',F:'Fail'};
 function workoutHtml(dow,today){
  var ed=edit,d=wd(),key,h;
  if(ed){key=ed.k;dow=pd(d).getDay();h=editBar(d,dow,key)}
  else{key=view==='today'?today:view;
-  h='<div class="chips" role="group" aria-label="Choose workout"><button class="chip" data-view="today" aria-pressed="'+(view==='today')+'">Today</button><button class="chip" data-view="A" aria-pressed="'+(view==='A')+'">Workout A</button><button class="chip" data-view="B" aria-pressed="'+(view==='B')+'">Workout B</button></div>'}
+  h='<div class="chips" role="group" aria-label="Choose workout"><button class="chip" data-view="today" aria-pressed="'+(view==='today')+'">Today</button><button class="chip" data-view="A" aria-pressed="'+(view==='A')+'">Workout A</button><button class="chip" data-view="B" aria-pressed="'+(view==='B')+'">Workout B</button></div><button class="chip rchip" data-view="R" aria-pressed="'+(view==='R')+'">Recovery day: chest or shoulders need a rest</button>'}
  if(!key){
   var hike=dow===6?hikeCard():'',cu=catchUp(null);if(cu)return h+cu+hike;
   return h+'<div class="msg"><b>'+plan(dow)+'</b>No lifting planned. '+(dow===6?'Enjoy the hike and eat well before you set off.':dow===0?'Recovery day. Next lifting session is Monday.':'Rest up. Your next session is the next lifting day.')+' Pick Workout A or B above if you want to look one over.</div>'+hike;
@@ -688,7 +693,7 @@ function workoutHtml(dow,today){
   return '<div class="ex'+(all?' ok':'')+'"><div class="top"><b>'+esc(nm)+'</b><span class="meta">'+(rg&&!opt?n+(xn?'+'+xn:'')+' x '+rg+(sec?' sec':''):'')+'</span></div>'+vars+'<div class="row"><div class="sets">'+pl+'</div></div>'+(opt?'':extra(sl,id,n,xn,va))+'</div>';
  }).join('');
  markFin(d,dn,tot,key);
- var note=(!ed&&view==='today'&&dow===5)?'<p class="small">Friday: first lift is down to 2 sets so your legs are fresh for Saturday.</p>':'';
+ var note=key==='R'?'<p class="small rnote"><b>Recovery day.</b> Legs, glutes and core only: no pressing, nothing overhead and nothing resting on your shoulders. Muscle soreness is fine to train around. A sharp or joint pain, or pain that is getting worse, is not: skip the gym and get it checked. Use the bike for cardio rather than the rower or cross-trainer. Doing this on a lifting day counts as going.</p>':(!ed&&view==='today'&&dow===5)?'<p class="small">Friday: first lift is down to 2 sets so your legs are fresh for Saturday.</p>':'';
  return h+(ed?'':catchUp(today))+heroHtml(W[key].title,dn,tot,key)+note+body+'<p class="small">Stop each set 1-2 reps short of failure. Type the weight and reps for each set, or just tick it to log the suggested weight. Tap Work to mark a warm-up, drop or failure set; warm-ups stay out of your PBs and volume. When you hit the top of the range on every set, the app will tell you to add weight. Everything saves on this device.</p><button class="ghost" data-act="reset">'+(ed?'Clear this day':'Clear today\'s sets')+'</button>';
 }
 
@@ -696,7 +701,7 @@ function weekHtml(){
  var ws=weekState(),pl=0,dn=0,wk=0,a=ws[0].k,b=ws[6].k;
  S.c.forEach(function(e){if(e.d>=a&&e.d<=b)wk+=e.m});
  var h=ws.map(function(x){var st='',cd=S.c.filter(function(e){return e.d===x.k}).map(cardioTxt).join('; ');if(x.plan&&!x.pre)pl++;if(x.done)dn++;
-  if(x.done)st=' <span class="ok">&#10003; '+(x.done!==x.plan?'did Workout '+x.done:'done')+'</span>';
+  if(x.done)st=' <span class="ok">&#10003; '+(x.done!==x.plan?'did '+W[x.done].title:'done')+'</span>';
   else if(x.madeUp)st=' <span class="ok">made up</span>';
   else if(x.missed)st=' <span class="miss">missed</span>';
   return '<div class="day'+(x.k===dkey(now)?' now':'')+'"><span>'+DAYS[x.dow]+'</span><span>'+plan(x.dow)+(x.plan&&!x.done&&!x.past?', 9am':'')+st+(cd?'<br><span class="small">'+cd+'</span>':'')+'</span></div>'}).join('');
@@ -708,7 +713,7 @@ function weekHtml(){
  '<p class="small">Adding this to your iPhone Home Screen? The installed app keeps its own data, separate from Safari. Export a backup here first, then open the installed app and import it.</p>'+
  '<h2>Danger zone</h2><p class="small">Deletes every weight, rep, note, bodyweight entry and cardio log on this device.</p><button class="ghost danger" data-act="wipe">Delete all my data</button>';
 }
-function ensureRt(){if(!S.rt){S.rt={};['A','B'].forEach(function(k){S.rt[k]=W[k].items.map(function(x){return [x[0],x[2],x[3]]})})}}
+function ensureRt(){S.rt=S.rt||{};WKS.forEach(function(k){if(!S.rt[k])S.rt[k]=W[k].items.map(function(x){return [x[0],x[2],x[3]]})})}
 function addList(){
  var skip={goblet:1,backext:1,plank:1};
  return Object.keys(EXC).filter(function(id){return !skip[id]&&!routineHas(id)}).sort(function(a,b){var x=EXC[a],y=EXC[b];return x.g===y.g?(x.n<y.n?-1:1):(GROUPS.indexOf(x.g)-GROUPS.indexOf(y.g))});
@@ -716,11 +721,11 @@ function addList(){
 function routineHtml(){
  var opts=addList().map(function(id){return '<option value="'+id+'">'+esc(EXC[id].g)+': '+esc(EXC[id].n)+'</option>'}).join('');
  var h='<h2>Edit your routine</h2><p class="small">Change sets and rep ranges, reorder or remove lifts, or add new ones. Your logged history stays safe. On the workout screen, Swap changes a lift for one day when a machine is taken.</p>';
- ['A','B'].forEach(function(k){
+ WKS.forEach(function(k){
   var rows=W[k].items;
-  h+='<div class="ex"><div class="top"><b>Workout '+k+'</b><span class="meta">'+rows.length+' lifts</span></div>'+rows.map(function(x,i){
+  h+='<div class="ex"><div class="top"><b>'+W[k].title+'</b><span class="meta">'+rows.length+' lifts</span></div>'+rows.map(function(x,i){
    return '<div class="rr"><span class="rn">'+esc(x[1])+'</span><span class="rbtns"><button class="ghost" data-rk="'+k+'|'+i+'|u" aria-label="Move up">&uarr;</button><button class="ghost" data-rk="'+k+'|'+i+'|d" aria-label="Move down">&darr;</button><button class="ghost" data-rt="'+k+'|'+i+'|-1" aria-label="Fewer sets">-</button><b>'+x[2]+' sets</b><button class="ghost" data-rt="'+k+'|'+i+'|1" aria-label="More sets">+</button><input data-rr="'+k+'|'+i+'" value="'+esc(x[3])+'" inputmode="numeric" maxlength="7" aria-label="Rep range"><button class="ghost danger" data-rk="'+k+'|'+i+'|x" aria-label="Remove '+esc(x[1])+'">Remove</button></span></div>'}).join('')+
-   '<div class="form"><select id="ra-'+k+'" aria-label="Lift to add to Workout '+k+'">'+opts+'</select><button class="chip" data-act="radd" data-ra="'+k+'">Add</button></div></div>';
+   '<div class="form"><select id="ra-'+k+'" aria-label="Lift to add to '+W[k].title+'">'+opts+'</select><button class="chip" data-act="radd" data-ra="'+k+'">Add</button></div></div>';
  });
  h+='<div class="ex"><div class="top"><b>Create your own lift</b></div><p class="small">Pick the muscle group so it counts towards your weekly sets, then add it to a workout above.</p><div class="form"><input id="cxn" type="text" maxlength="40" placeholder="Name" aria-label="Lift name" style="width:auto"><select id="cxg" aria-label="Muscle group">'+GROUPS.map(function(g){return '<option>'+g+'</option>'}).join('')+'</select></div><div class="form"><label class="small" style="flex:1"><input id="cxu" type="checkbox" style="flex:none;width:auto"> Timed hold (seconds)</label><button class="chip" data-act="cxadd">Create</button></div></div>'+
   '<button class="ghost" data-act="rreset">Reset routine to the original</button>';
@@ -809,12 +814,12 @@ function progressHtml(){
  rows.forEach(function(x){var e=x[0];h+='<div class="day"><span>'+esc(e.t)+' &middot; '+e.d.slice(5).split('-').reverse().join('/')+'</span><span>'+(e.m?e.m+' min':'')+(e.m&&e.k?', ':'')+(e.k?e.k+' km':'')+' <button class="ghost" data-del="'+x[1]+'" aria-label="Delete entry" style="margin:0 0 0 6px;padding:4px 9px">x</button></span></div>'});
  return h;
 }
-function dayKey(d){var f=S.fin[d];if(f==='A'||f==='B')return f;return sessionFor(pd(d).getDay(),pd(d))||'A'}
+function dayKey(d){var f=S.fin[d];if(WKS.indexOf(f)>=0)return f;return sessionFor(pd(d).getDay(),pd(d))||'A'}
 function historyHtml(){
  var ds={};Object.keys(S.fin).forEach(function(k){ds[k]=1});
  [S.r,S.kg,S.h].forEach(function(A){Object.keys(A).forEach(function(id){A[id].forEach(function(e){ds[e[0]]=1})})});
  var all=Object.keys(ds).sort().reverse(),ids=Object.keys(NAMES);
- var h='<h2 style="margin-top:0">Log or fix a day</h2><div class="ex"><p class="small">Forgot to log a session, or typed something wrong? Pick the day and the workout, then fill it in.</p><div class="form"><input id="hd" type="date" value="'+dkey(now)+'" max="'+dkey(now)+'" aria-label="Date"><select id="hk" aria-label="Workout"><option value="A">Workout A</option><option value="B">Workout B</option></select></div><div class="form"><button class="chip" data-act="opendate">Open that day</button></div></div><h2>Past sessions</h2>';
+ var h='<h2 style="margin-top:0">Log or fix a day</h2><div class="ex"><p class="small">Forgot to log a session, or typed something wrong? Pick the day and the workout, then fill it in.</p><div class="form"><input id="hd" type="date" value="'+dkey(now)+'" max="'+dkey(now)+'" aria-label="Date"><select id="hk" aria-label="Workout"><option value="A">Workout A</option><option value="B">Workout B</option><option value="R">Recovery day</option></select></div><div class="form"><button class="chip" data-act="opendate">Open that day</button></div></div><h2>Past sessions</h2>';
  if(!all.length)h+='<p class="small">Finished sessions and logged sets show up here.</p>';
  all.slice(0,histN).forEach(function(d){
   var lines='',n=0,vol=0,key=dayKey(d),p=pd(d);
@@ -825,7 +830,7 @@ function historyHtml(){
    L.forEach(function(s){if(s.t!=='W'&&s.k>0&&s.r>0&&!sec)vol+=s.k*s.r});
    lines+='<div class="hl"><b>'+esc(NAMES[id])+(tp>0&&pp>0&&tp>pp?' <span class="pb">PB</span>':'')+'</b><span>'+(L.length?L.map(function(s){return (s.t==='W'?'warm ':'')+setTxt(s,sec)}).join(', ')+(sec?' sec':''):lw+' kg')+(e?' &middot; RPE '+e:'')+'</span></div>';
   });
-  h+='<details class="ex hs"><summary><b>'+DAYS[p.getDay()].slice(0,3)+' '+ddmm(d)+(d.slice(0,4)!==dkey(now).slice(0,4)?'/'+d.slice(2,4):'')+'</b><span class="meta">'+(S.fin[d]?'Workout '+key+' &#10003;':'Workout '+key+' partly done')+(vol?' &middot; '+Math.round(vol)+' kg':'')+'</span></summary>'+(lines||'<p class="hist">No sets logged.</p>')+'<div class="cbtns"><button class="ghost" data-edit="'+d+':'+key+'">Edit this day</button><button class="ghost danger" data-delday="'+d+'">Delete this day</button></div></details>';
+  h+='<details class="ex hs"><summary><b>'+DAYS[p.getDay()].slice(0,3)+' '+ddmm(d)+(d.slice(0,4)!==dkey(now).slice(0,4)?'/'+d.slice(2,4):'')+'</b><span class="meta">'+(S.fin[d]?W[key].title+' &#10003;':W[key].title+' partly done')+(vol?' &middot; '+Math.round(vol)+' kg':'')+'</span></summary>'+(lines||'<p class="hist">No sets logged.</p>')+'<div class="cbtns"><button class="ghost" data-edit="'+d+':'+key+'">Edit this day</button><button class="ghost danger" data-delday="'+d+'">Delete this day</button></div></details>';
  });
  if(all.length>histN)h+='<button class="ghost" data-act="more">Show more</button>';
  return h;
@@ -882,8 +887,8 @@ document.addEventListener('click',function(e){
  if(q.act==='export'){exportData();return}
  if(q.act==='import'){document.getElementById('imp').click();return}
  if(q.act==='rawexport'){try{saveFile('gym-raw-data.json',localStorage.getItem(K)||'{}')}catch(e){}return}
- if(q.act==='opendate'){var hd=document.getElementById('hd').value,hk=document.getElementById('hk').value;if(!DK.test(hd)||hd>dkey(now))return;edit={d:hd,k:hk==='B'?'B':'A'};tab='today';render();window.scrollTo(0,0);return}
- if(q.edit){var ep=q.edit.split(':');edit={d:ep[0],k:ep[1]==='B'?'B':'A'};tab='today';render();window.scrollTo(0,0);return}
+ if(q.act==='opendate'){var hd=document.getElementById('hd').value,hk=document.getElementById('hk').value;if(!DK.test(hd)||hd>dkey(now))return;edit={d:hd,k:WKS.indexOf(hk)>=0?hk:'A'};tab='today';render();window.scrollTo(0,0);return}
+ if(q.edit){var ep=q.edit.split(':');edit={d:ep[0],k:WKS.indexOf(ep[1])>=0?ep[1]:'A'};tab='today';render();window.scrollTo(0,0);return}
  if(q.act==='exitedit'){edit=null;tab='history';render();return}
  if(q.delday){if(confirm('Delete every set logged on '+ddmm(q.delday)+'? This cannot be undone.')){dropDay(q.delday);save();render()}return}
  if(q.act==='more'){histN+=15;render();return}
@@ -892,12 +897,12 @@ document.addEventListener('click',function(e){
   if(kp[2]==='x'){if(L.length>1)L.splice(ki,1)}
   else{var kj=kp[2]==='u'?ki-1:ki+1;if(kj<0||kj>=L.length)return;var tmp=L[ki];L[ki]=L[kj];L[kj]=tmp}
   save();rebuild();render();return}
- if(q.act==='radd'){var ak=q.ra,sel=document.getElementById('ra-'+ak),aid=sel&&sel.value;if(!aid||!EXC[aid])return;ensureRt();if(S.rt[ak].length>=12)return;
+ if(q.act==='radd'){var ak=q.ra,sel=document.getElementById('ra-'+ak),aid=sel&&sel.value;if(!aid||!EXC[aid]||WKS.indexOf(ak)<0)return;ensureRt();if(S.rt[ak].length>=12||S.rt[ak].some(function(x){return x[0]===aid}))return;
   var dr=null;['A','B'].forEach(function(z){DEF[z].forEach(function(x){if(x[0]===aid)dr=x})});
   S.rt[ak].push([aid,dr?dr[1]:EXC[aid].s||3,dr?dr[2]:EXC[aid].r||'8-12']);save();rebuild();render();return}
  if(q.act==='cxadd'){var nm=document.getElementById('cxn').value.trim().slice(0,40),gp=document.getElementById('cxg').value,sc=document.getElementById('cxu').checked;
   if(!nm||Object.keys(S.cx).length>=40)return;var cid='x'+Date.now().toString(36);S.cx[cid]={n:nm,g:gp};if(sc)S.cx[cid].u='sec';save();rebuild();render();return}
- if(q.act==='rreset'){if(confirm('Put both workouts back to the original routine? Your logged history is kept.')){S.rt=null;rebuild();save();render()}return}
+ if(q.act==='rreset'){if(confirm('Put all three workouts back to the original routine? Your logged history is kept.')){S.rt=null;rebuild();save();render()}return}
  if(q.act==='wipe'){var nf=Object.keys(S.fin).length;
   if(confirm('Delete ALL your data on this device? That is every weight, rep, note, bodyweight entry and cardio log ('+nf+' finished session'+(nf===1?'':'s')+'). '+(S.bk?'Your last backup was '+S.bk.split('-').reverse().join('/')+'. ':'You have never exported a backup. ')+'This cannot be undone.')){
    S=cleanState({start:dkey(monday(now)),style:S.style,first:dkey(now)});edit=null;rebuild();save();render()}}
